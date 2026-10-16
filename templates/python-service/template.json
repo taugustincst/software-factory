@@ -1,0 +1,14 @@
+{
+  "title": "Python integration service",
+  "stack": "Python 3.13 · FastAPI · Pydantic · uv · pytest · Ruff · mypy · Docker",
+  "defaultDescription": "HTTP integration service",
+  "vars": { "codeqlLanguage": "python", "dependabotEcosystem": "uv", "releaseType": "python" },
+  "commands": {
+    "install": "uv sync",
+    "lint": "uv run ruff check . && uv run ruff format --check .",
+    "typecheck": "uv run mypy",
+    "test": "uv run pytest",
+    "dev": "uv run uvicorn app.main:app --reload"
+  },
+  "postCreate": ["uv run ruff format .", "uv run ruff check --fix --quiet ."]
+}

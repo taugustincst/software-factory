@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/taugustincst/software-factory/main/schema/factory.schema.json",
+  "title": "factory.json",
+  "description": "Canonical commands for a repository. CI, Claude Code hooks and the factory pipeline gates all run these.",
+  "type": "object",
+  "required": ["commands"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": { "type": "string" },
+    "template": { "type": "string" },
+    "commands": {
+      "type": "object",
+      "required": ["test"],
+      "properties": {
+        "install": { "type": "string", "description": "Install dependencies" },
+        "lint": { "type": "string", "description": "Lint and format check; must exit non-zero on problems" },
+        "typecheck": { "type": "string" },
+        "test": { "type": "string", "description": "Full test suite" },
+        "build": { "type": "string" },
+        "dev": { "type": "string", "description": "Local development server (not run by gates)" }
+      },
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

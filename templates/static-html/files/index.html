@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="{{factory.description}}" />
+    <title>{{factory.title}}</title>
+    <style>
+      :root {
+        --bg: #fbfaf8;
+        --fg: #1d1b18;
+        --muted: #6f6a62;
+        --line: #e6e2db;
+        --accent: #0f766e;
+        color-scheme: light dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121110;
+          --fg: #f1efea;
+          --muted: #a29d94;
+          --line: #2b2925;
+          --accent: #2dd4bf;
+        }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--fg); }
+      main { max-width: 560px; margin: 0 auto; padding: 48px 16px; }
+      h1 { margin: 0 0 4px; font-size: 1.75rem; }
+      .muted { color: var(--muted); margin: 0; }
+      form { display: flex; gap: 8px; margin: 24px 0 12px; }
+      input[type='text'] { flex: 1; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; }
+      button { font: inherit; padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      ul { list-style: none; margin: 0; padding: 0; }
+      li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+      li label { display: flex; gap: 10px; align-items: center; }
+      li.done span { text-decoration: line-through; color: var(--muted); }
+      li button { background: transparent; color: var(--muted); padding: 4px 10px; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>{{factory.title}}</h1>
+      <p class="muted" id="count" aria-live="polite">0 open</p>
+      <form id="add">
+        <label for="title" class="sr-only">New item</label>
+        <input id="title" type="text" maxlength="200" placeholder="Add an item" autocomplete="off" />
+        <button type="submit" id="addBtn" disabled>Add</button>
+      </form>
+      <ul id="list"></ul>
+      <p class="muted" id="empty">Nothing here yet.</p>
+    </main>
+    <script>
+      (() => {
+        'use strict';
+        const STORAGE_KEY = '{{factory.name}}:items';
+        const $ = (id) => document.getElementById(id);
+
+        // Storage can be unavailable (private mode, blocked cookies); the app still works in memory.
+        const store = {
+          load() {
+            try {
+              const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
+              return Array.isArray(parsed) ? parsed.filter((i) => typeof i?.title === 'string') : [];
+            } catch {
+              return [];
+            }
+          },
+          save(items) {
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+            } catch {
+              /* ignore: in-memory only */
+            }
+          },
+        };
+
+        let items = store.load();
+
+        function render() {
+          const list = $('list');
+          list.replaceChildren(
+            ...items.map((item, index) => {
+              const li = document.createElement('li');
+              if (item.done) li.className = 'done';
+              const label = document.createElement('label');
+              const box = document.createElement('input');
+              box.type = 'checkbox';
+              box.checked = Boolean(item.done);
+              box.addEventListener('change', () => update(index, { done: box.checked }));
+              const text = document.createElement('span');
+              text.textContent = item.title; // textContent, never innerHTML, for user data
+              label.append(box, text);
+              const del = document.createElement('button');
+              del.type = 'button';
+              del.textContent = '×';
+              del.setAttribute('aria-label', `Delete ${item.title}`);
+              del.addEventListener('click', () => remove(index));
+              li.append(label, del);
+              return li;
+            }),
+          );
+          const open = items.filter((i) => !i.done).length;
+          $('count').textContent = `${open} open of ${items.length}`;
+          $('empty').hidden = items.length > 0;
+        }
+
+        function commit(next) {
+          items = next;
+          store.save(items);
+          render();
+        }
+        function update(index, patch) {
+          commit(items.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+        }
+        function remove(index) {
+          commit(items.filter((_, i) => i !== index));
+        }
+
+        $('title').addEventListener('input', (e) => {
+          $('addBtn').disabled = e.target.value.trim() === '';
+        });
+        $('add').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const title = $('title').value.trim();
+          if (!title) return;
+          commit([...items, { title, done: false }]);
+          $('title').value = '';
+          $('addBtn').disabled = true;
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

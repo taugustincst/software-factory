@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  smoke:
+    name: Template smoke (${{ matrix.template }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [static-html, fullstack, node-service, python-service]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: astral-sh/setup-uv@v6
+        if: matrix.template == 'python-service'
+      - name: Configure git
+        run: |
+          git config --global user.name "ci"
+          git config --global user.email "ci@users.noreply.github.com"
+      # Scaffolds the template, installs it, runs its own lint/typecheck/test/build,
+      # then runs the agent pipeline (mock executor) through every gate inside it.
+      - run: node scripts/smoke.js ${{ matrix.template }}
+
+  workflows:
+    name: Lint GitHub workflows (factory + every template)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Render every template without installing
+        run: |
+          for t in static-html fullstack node-service python-service; do
+            node bin/factory.js new "lint-$t" -t "$t" --dir "rendered/$t" --no-install --no-git
+          done
+      - name: actionlint
+        run: |
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.7 -color \
+            .github/workflows/*.yml rendered/*/.github/workflows/*.yml

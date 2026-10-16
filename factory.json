@@ -1,0 +1,10 @@
+{
+  "$schema": "./schema/factory.schema.json",
+  "name": "software-factory",
+  "template": "custom",
+  "commands": {
+    "install": "npm ci",
+    "lint": "npm run lint",
+    "test": "npm test"
+  }
+}

@@ -1,0 +1,2 @@
+# Default reviewers for every change. Branch protection should require a code-owner review.
+* @{{factory.owner}}

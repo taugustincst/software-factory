@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose a change. Add the "factory" label to have the agent pipeline build it and open a PR.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who has the problem, and why does it matter?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should be true when this is done? Concrete, testable statements work best.
+      placeholder: |
+        - Front-desk users can export today's visits as CSV
+        - The export excludes cancelled visits
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and out of scope
+      description: Performance, security, privacy, things this should not do.
+  - type: markdown
+    attributes:
+      value: 'Never paste real patient or personal data into an issue. Use synthetic examples.'

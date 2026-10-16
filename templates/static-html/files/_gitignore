@@ -1,0 +1,6 @@
+node_modules/
+coverage/
+_site/
+.factory/
+.env
+.DS_Store

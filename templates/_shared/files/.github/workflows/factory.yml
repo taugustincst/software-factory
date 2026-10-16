@@ -1,0 +1,176 @@
+# Agent pipeline: label an issue "factory" and the software factory writes a spec, plans,
+# builds, tests and reviews the change, then opens a pull request for a human to merge.
+#
+# Setup (once per repo):
+#   1. Add the ANTHROPIC_API_KEY repository secret.
+#   2. Optional: add FACTORY_TOKEN (fine-grained PAT or GitHub App token with contents and
+#      pull-requests write). PRs opened with the default GITHUB_TOKEN do not trigger CI.
+#   3. Create the "factory" label. Only people with write access can trigger a run.
+#
+# Security design: issue text is untrusted input to an agent that can run code. So the agent
+# job gets read-only repo permissions, no persisted git credentials and no write token. A
+# separate job, which runs no agent, applies the reviewed patch, pushes and opens the PR.
+name: Factory pipeline
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      request:
+        description: What should the factory build?
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: factory-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'factory'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require write access for whoever triggered the run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+        run: |
+          perm=$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq .permission)
+          case "$perm" in admin|maintain|write) echo "ok: $ACTOR has $perm" ;; *) echo "::error::$ACTOR ($perm) may not run the factory"; exit 1 ;; esac
+
+  build:
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.factory.outputs.status }}
+      run_id: ${{ steps.factory.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: astral-sh/setup-uv@v6
+        if: hashFiles('pyproject.toml') != ''
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Write request
+        # Untrusted text goes through env vars, never inline ${{ }} in the script (prevents injection).
+        env:
+          TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+          INPUT: ${{ github.event.inputs.request }}
+        run: |
+          if [ -n "$INPUT" ]; then printf '%s\n' "$INPUT" > "$RUNNER_TEMP/request.md";
+          else printf '# %s\n\n%s\n' "$TITLE" "$BODY" > "$RUNNER_TEMP/request.md"; fi
+
+      - name: Run factory (spec → review, no commit)
+        id: factory
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          npx --yes {{factory.factoryPackage}} run \
+            --spec "$RUNNER_TEMP/request.md" --no-commit ${ISSUE:+--issue "$ISSUE"}
+
+      - name: Package the change
+        if: steps.factory.outputs.status == 'passed'
+        env:
+          RUN_ID: ${{ steps.factory.outputs.run_id }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          git add -A
+          git diff --cached --binary > "$RUNNER_TEMP/out/change.patch"
+          cp ".factory/runs/$RUN_ID/run.json" "$RUNNER_TEMP/out/run.json"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.factory.outputs.status == 'passed'
+        with:
+          name: factory-change
+          path: ${{ runner.temp }}/out/
+          retention-days: 7
+
+      - name: Upload agent logs (private repositories only)
+        if: always() && github.event.repository.private
+        uses: actions/upload-artifact@v4
+        with:
+          name: factory-logs
+          path: .factory/runs/
+          include-hidden-files: true
+          retention-days: 14
+
+  ship:
+    needs: build
+    if: needs.build.outputs.status == 'passed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      pr_url: ${{ steps.ship.outputs.pr_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.FACTORY_TOKEN || github.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: factory-change
+          path: ${{ runner.temp }}/in
+
+      - name: Apply the reviewed change
+        env:
+          RUN_ID: ${{ needs.build.outputs.run_id }}
+        run: |
+          git apply --index "$RUNNER_TEMP/in/change.patch"
+          mkdir -p ".factory/runs/$RUN_ID"
+          cp "$RUNNER_TEMP/in/run.json" ".factory/runs/$RUN_ID/run.json"
+          git config user.name "software-factory[bot]"
+          git config user.email "software-factory@users.noreply.github.com"
+
+      - name: Push and open the pull request
+        id: ship
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_TOKEN || github.token }}
+          RUN_ID: ${{ needs.build.outputs.run_id }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: npx --yes {{factory.factoryPackage}} ship --run-id "$RUN_ID" ${ISSUE:+--issue "$ISSUE"}
+
+  report:
+    needs: [build, ship]
+    if: always() && github.event.issue.number
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          STATUS: ${{ needs.build.outputs.status || 'failed' }}
+          PR_URL: ${{ needs.ship.outputs.pr_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -n "$PR_URL" ]; then
+            gh issue comment "$ISSUE" -R "$REPO" --body "The factory built this and every gate passed. Review the PR: $PR_URL"
+          else
+            gh issue comment "$ISSUE" -R "$REPO" --body "The factory stopped before a PR could be opened (status: $STATUS). Details: $RUN_URL"
+          fi

@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+.git
+.github
+.claude
+.factory
+.env
+.env.*
+docs

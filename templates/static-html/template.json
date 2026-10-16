@@ -1,0 +1,13 @@
+{
+  "title": "Single-file HTML app",
+  "stack": "One self-contained index.html · vanilla JS · Vitest + jsdom · html-validate · GitHub Pages",
+  "defaultDescription": "Single-file web app",
+  "vars": { "codeqlLanguage": "javascript-typescript", "dependabotEcosystem": "npm", "releaseType": "simple" },
+  "commands": {
+    "install": "npm install",
+    "lint": "npm run lint",
+    "test": "npm test",
+    "dev": "npm run dev"
+  },
+  "postCreate": ["npm run format"]
+}

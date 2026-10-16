@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Factory Floor</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%224%22 y=%224%22 width=%228%22 height=%228%22 transform=%22rotate(45 8 8)%22 fill=%22%23ff6b2b%22/%3E%3C/svg%3E"
+    />
+    <link
+      href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%223%22 y=%223%22 width=%2210%22 height=%2210%22 transform=%22rotate(45 8 8)%22 fill=%22%23ff6b2b%22/%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        --bg: #f4f2ee;
+        --panel: #ffffff;
+        --ink: #1c1b19;
+        --muted: #6b675f;
+        --line: #e2ded6;
+        --accent: #d9480f;
+        --ok: #2b8a3e;
+        --warn: #b7791f;
+        --bad: #c92a2a;
+        --run: #1971c2;
+        --chip: #efebe4;
+        --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+        --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          --bg: #121211;
+          --panel: #1b1a18;
+          --ink: #ecebe7;
+          --muted: #9a958b;
+          --line: #2d2b27;
+          --accent: #ff6b2b;
+          --ok: #51cf66;
+          --warn: #fcc419;
+          --bad: #ff6b6b;
+          --run: #4dabf7;
+          --chip: #262420;
+        }
+      }
+      :root[data-theme='dark'] {
+        --bg: #121211;
+        --panel: #1b1a18;
+        --ink: #ecebe7;
+        --muted: #9a958b;
+        --line: #2d2b27;
+        --accent: #ff6b2b;
+        --ok: #51cf66;
+        --warn: #fcc419;
+        --bad: #ff6b6b;
+        --run: #4dabf7;
+        --chip: #262420;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 14px/1.5 var(--sans);
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      .brand {
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .brand i {
+        width: 12px;
+        height: 12px;
+        background: var(--accent);
+        display: inline-block;
+        transform: rotate(45deg);
+      }
+      .proj {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      header .spacer {
+        flex: 1;
+      }
+      button {
+        font: inherit;
+        border: 1px solid var(--line);
+        background: var(--chip);
+        color: var(--ink);
+        padding: 7px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+        font-weight: 600;
+      }
+      button:focus-visible,
+      textarea:focus-visible,
+      select:focus-visible,
+      .run-item:focus-visible,
+      .station:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        min-height: calc(100vh - 57px);
+      }
+      aside {
+        min-height: calc(100vh - 57px);
+        border-right: 1px solid var(--line);
+        background: var(--panel);
+        overflow: auto;
+        max-height: calc(100vh - 57px);
+        position: sticky;
+        top: 57px;
+      }
+      aside h2,
+      section h2 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--muted);
+        margin: 16px 16px 8px;
+        font-weight: 600;
+      }
+      .run-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 0;
+        border-left: 3px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .run-item[aria-current='true'] {
+        background: var(--chip);
+        border-left-color: var(--accent);
+      }
+      .run-item .t {
+        font-weight: 600;
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .run-item .m {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .dots {
+        letter-spacing: 2px;
+      }
+      .content {
+        padding: 20px 24px 60px;
+        min-width: 0;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 60px 0;
+        text-align: center;
+      }
+      .run-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 4px;
+      }
+      .run-head h1 {
+        font-size: 22px;
+        margin: 0;
+      }
+      .badge {
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 99px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border: 1px solid currentColor;
+      }
+      .s-passed {
+        color: var(--ok);
+      }
+      .s-failed {
+        color: var(--bad);
+      }
+      .s-running {
+        color: var(--run);
+      }
+      .s-pending {
+        color: var(--muted);
+      }
+      .s-cancelled {
+        color: var(--warn);
+      }
+      .meta {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .meta a {
+        color: var(--accent);
+      }
+      .line {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 0;
+        position: relative;
+        margin: 8px 0 24px;
+      }
+      .line::before {
+        content: '';
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        top: 27px;
+        height: 4px;
+        background: repeating-linear-gradient(90deg, var(--line) 0 10px, transparent 10px 16px);
+      }
+      .station {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: 0;
+        padding: 0 4px;
+        cursor: pointer;
+        color: var(--ink);
+      }
+      .node {
+        width: 58px;
+        height: 58px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: var(--panel);
+        border: 2px solid var(--line);
+        font-family: var(--mono);
+        font-weight: 700;
+        font-size: 16px;
+        transition: border-color 0.2s;
+      }
+      .station[data-status='passed'] .node {
+        border-color: var(--ok);
+        color: var(--ok);
+      }
+      .station[data-status='failed'] .node {
+        border-color: var(--bad);
+        color: var(--bad);
+      }
+      .station[data-status='running'] .node {
+        border-color: var(--run);
+        color: var(--run);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .station[aria-pressed='true'] .node {
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+      }
+      @keyframes pulse {
+        50% {
+          box-shadow: 0 0 0 6px color-mix(in srgb, var(--run) 25%, transparent);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .station[data-status='running'] .node {
+          animation: none;
+        }
+      }
+      .station .lbl {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .station .sub {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+        gap: 16px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        min-width: 0;
+      }
+      .card h3 {
+        margin: 0;
+        padding: 10px 14px;
+        font-size: 13px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+      }
+      .tabs {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+      .tabs button {
+        padding: 2px 8px;
+        font-size: 11px;
+        font-family: var(--mono);
+      }
+      .tabs button[aria-pressed='true'] {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .checks {
+        list-style: none;
+        margin: 0;
+        padding: 6px 0;
+      }
+      .checks li {
+        padding: 6px 14px;
+        display: grid;
+        grid-template-columns: 22px 1fr;
+        gap: 4px;
+      }
+      .checks .ic {
+        font-family: var(--mono);
+        font-weight: 700;
+      }
+      .checks pre {
+        grid-column: 2;
+        margin: 4px 0 0;
+        font: 11px/1.45 var(--mono);
+        color: var(--muted);
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 160px;
+        overflow: auto;
+      }
+      .summary {
+        padding: 10px 14px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--muted);
+        white-space: pre-wrap;
+        max-height: 180px;
+        overflow: auto;
+      }
+      pre.log {
+        margin: 0;
+        padding: 12px 14px;
+        font: 11.5px/1.5 var(--mono);
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 520px;
+        overflow: auto;
+        background: color-mix(in srgb, var(--bg) 60%, var(--panel));
+      }
+      .events {
+        list-style: none;
+        margin: 0;
+        padding: 8px 14px;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        max-height: 220px;
+        overflow: auto;
+      }
+      .events li {
+        padding: 2px 0;
+        color: var(--muted);
+      }
+      .events time {
+        color: var(--ink);
+        margin-right: 8px;
+      }
+      dialog {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        color: var(--ink);
+        width: min(640px, calc(100vw - 32px));
+        padding: 0;
+      }
+      dialog::backdrop {
+        background: rgb(0 0 0 / 0.45);
+      }
+      dialog form {
+        padding: 20px;
+        display: grid;
+        gap: 14px;
+      }
+      dialog h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        font-weight: 600;
+        font-size: 13px;
+      }
+      textarea,
+      select {
+        font: 13px/1.5 var(--mono);
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      textarea {
+        min-height: 200px;
+        resize: vertical;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .row label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 500;
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 0;
+      }
+      .err {
+        color: var(--bad);
+        font-size: 13px;
+        min-height: 1em;
+        margin: 0;
+      }
+      @media (max-width: 860px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+        aside {
+          position: static;
+          max-height: 260px;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .grid2 {
+          grid-template-columns: 1fr;
+        }
+        .content {
+          padding: 16px;
+        }
+        .line {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          row-gap: 16px;
+        }
+        .line::before {
+          display: none;
+        }
+        .proj {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><i aria-hidden="true"></i>Factory Floor</div>
+      <div class="proj" id="proj"></div>
+      <div class="spacer"></div>
+      <button id="theme" type="button" aria-label="Toggle color theme" style="font-size: 16px; line-height: 1">◐</button>
+      <button class="primary" id="newBtn" type="button">New run</button>
+    </header>
+    <main>
+      <aside aria-label="Runs">
+        <h2>Runs</h2>
+        <div id="runs"></div>
+      </aside>
+      <section class="content" id="content" aria-live="polite">
+        <div class="empty">No runs yet. Start one with <b>New run</b>, or <code>factory run --request "…"</code>.</div>
+      </section>
+    </main>
+
+    <dialog id="dlg" aria-labelledby="dlgTitle">
+      <form id="form" method="dialog">
+        <h2 id="dlgTitle">New pipeline run</h2>
+        <label
+          >Request
+          <textarea
+            id="req"
+            required
+            minlength="10"
+            maxlength="20000"
+            placeholder="# Add CSV export to the visits table&#10;&#10;Front-desk staff need to export today's visits as CSV for the billing team…"
+          ></textarea>
+        </label>
+        <p class="hint">A rough idea, ticket or issue text. The spec agent turns it into requirements and acceptance criteria.</p>
+        <div class="row">
+          <label
+            >Executor
+            <select id="exec">
+              <option value="claude">Claude Code (real agents)</option>
+              <option value="mock">Mock (offline demo)</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="ship" /> Push and open a PR</label>
+        </div>
+        <p class="err" id="formErr" role="alert"></p>
+        <div class="row" style="justify-content: flex-end">
+          <button type="button" id="cancel">Cancel</button>
+          <button class="primary" type="submit">Start run</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script>
+      (() => {
+        const $ = (s) => document.querySelector(s);
+        const el = (tag, attrs = {}, ...kids) => {
+          const n = document.createElement(tag);
+          for (const [k, v] of Object.entries(attrs)) {
+            if (k === 'class') n.className = v;
+            else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+            else if (v !== false && v != null) n.setAttribute(k, v === true ? '' : v);
+          }
+          for (const k of kids.flat()) if (k != null) n.append(k instanceof Node ? k : document.createTextNode(String(k)));
+          return n;
+        };
+        const DOT = { passed: '●', failed: '✗', running: '◐', pending: '○' };
+        const ICON = { spec: 'S', plan: 'P', build: 'B', test: 'T', review: 'R', ship: '⇪' };
+        const state = { runs: [], selected: null, run: null, stage: null, attempt: null, logFor: null };
+
+        try {
+          const t = localStorage.getItem('ff-theme');
+          if (t) document.documentElement.dataset.theme = t;
+        } catch {}
+        $('#theme').onclick = () => {
+          const dark = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() === '#121211';
+          const next = dark ? 'light' : 'dark';
+          document.documentElement.dataset.theme = next;
+          try {
+            localStorage.setItem('ff-theme', next);
+          } catch {}
+        };
+
+        const api = async (p, opt) => {
+          const r = await fetch(p, opt);
+          const ct = r.headers.get('content-type') || '';
+          const body = ct.includes('json') ? await r.json() : await r.text();
+          if (!r.ok) throw new Error(body.error || r.statusText);
+          return body;
+        };
+        const ago = (iso) => {
+          if (!iso) return '';
+          const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+          return s < 60
+            ? `${s | 0}s ago`
+            : s < 3600
+              ? `${(s / 60) | 0}m ago`
+              : s < 86400
+                ? `${(s / 3600) | 0}h ago`
+                : new Date(iso).toLocaleDateString();
+        };
+        const dur = (a, b) => {
+          if (!a) return '';
+          const s = ((b ? new Date(b) : new Date()) - new Date(a)) / 1000;
+          return s < 60 ? `${s | 0}s` : `${(s / 60) | 0}m ${(s % 60) | 0}s`;
+        };
+
+        function renderRuns() {
+          const box = $('#runs');
+          box.replaceChildren(
+            ...state.runs.map((r) =>
+              el(
+                'button',
+                {
+                  class: 'run-item',
+                  type: 'button',
+                  'aria-current': String(r.id === state.selected),
+                  onclick: () => {
+                    state.selected = r.id;
+                    state.stage = null;
+                    state.attempt = null;
+                    refresh();
+                  },
+                },
+                el('span', { class: 't' }, r.title),
+                el(
+                  'span',
+                  { class: 'm' },
+                  el('span', { class: `s-${r.status}` }, r.status),
+                  el('span', { class: 'dots' }, r.stages.map((s) => DOT[s.status] || '○').join('')),
+                  el('span', {}, ago(r.startedAt)),
+                ),
+              ),
+            ),
+          );
+          if (!state.runs.length) box.replaceChildren(el('p', { class: 'hint', style: 'padding:0 16px' }, 'Nothing here yet.'));
+        }
+
+        function currentStage(run) {
+          if (state.stage && run.stages.some((s) => s.id === state.stage)) return run.stages.find((s) => s.id === state.stage);
+          return (
+            run.stages.find((s) => s.status === 'running') ||
+            [...run.stages].reverse().find((s) => s.attempts.length) ||
+            run.stages[0]
+          );
+        }
+
+        async function renderRun() {
+          const run = state.run;
+          const c = $('#content');
+          if (!run) {
+            if (!state.runs.length) return;
+            c.replaceChildren(el('div', { class: 'empty' }, 'Select a run.'));
+            return;
+          }
+          const st = currentStage(run);
+          const att = st.attempts.find((a) => a.n === state.attempt) || st.attempts[st.attempts.length - 1];
+
+          const line = el(
+            'div',
+            { class: 'line', role: 'group', 'aria-label': 'Pipeline stages' },
+            run.stages.map((s) =>
+              el(
+                'button',
+                {
+                  class: 'station',
+                  type: 'button',
+                  'data-status': s.status,
+                  'aria-pressed': String(s.id === st.id),
+                  onclick: () => {
+                    state.stage = s.id;
+                    state.attempt = null;
+                    renderRun();
+                  },
+                },
+                el(
+                  'span',
+                  { class: 'node', 'aria-hidden': 'true' },
+                  s.status === 'passed' ? '✓' : s.status === 'failed' ? '✗' : ICON[s.id] || '?',
+                ),
+                el('span', { class: 'lbl' }, s.title),
+                el(
+                  'span',
+                  { class: 'sub' },
+                  `${s.agent || 'deterministic'}${s.attempts.length ? ` · ${s.attempts.length}×` : ''}`,
+                ),
+              ),
+            ),
+          );
+
+          const checks = (att?.gate || []).map((g) =>
+            el(
+              'li',
+              {},
+              el(
+                'span',
+                { class: `ic ${g.ok ? 's-passed' : g.severity === 'warn' ? 's-cancelled' : 's-failed'}` },
+                g.ok ? '✓' : g.severity === 'warn' ? '!' : '✗',
+              ),
+              el('span', {}, g.name),
+              g.detail ? el('pre', {}, g.detail) : null,
+            ),
+          );
+
+          const tabs = el(
+            'div',
+            { class: 'tabs' },
+            st.attempts.map((a) =>
+              el(
+                'button',
+                {
+                  type: 'button',
+                  'aria-pressed': String(att && a.n === att.n),
+                  onclick: () => {
+                    state.attempt = a.n;
+                    renderRun();
+                  },
+                },
+                `#${a.n}${a.ok ? ' ✓' : a.finishedAt ? ' ✗' : ' …'}`,
+              ),
+            ),
+          );
+
+          const logPre = el('pre', { class: 'log', id: 'log' }, att ? 'Loading log…' : 'No attempts yet.');
+          c.replaceChildren(
+            ...[
+              el(
+                'div',
+                { class: 'run-head' },
+                el('h1', {}, run.title),
+                el('span', { class: `badge s-${run.status}` }, run.status),
+              ),
+              el(
+                'div',
+                { class: 'meta' },
+                el('span', {}, `run ${run.id}`),
+                el('span', {}, `${run.executor} executor`),
+                el('span', {}, `⏱ ${dur(run.startedAt, run.finishedAt)}`),
+                el('span', {}, `$${(run.costUsd || 0).toFixed(2)}`),
+                run.reviewLoops ? el('span', {}, `review loops ${run.reviewLoops}`) : null,
+                run.branch ? el('span', {}, `⎇ ${run.branch}`) : null,
+                run.prUrl && /^https:\/\/github\.com\//.test(run.prUrl)
+                  ? el('a', { href: run.prUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Pull request ↗')
+                  : null,
+                el('span', {}, `📁 ${run.artifactDir}/`),
+              ),
+              run.error ? el('p', { class: 'err' }, run.error) : null,
+              line,
+              el(
+                'div',
+                { class: 'grid2' },
+                el(
+                  'div',
+                  { class: 'card' },
+                  el('h3', {}, el('span', {}, `${st.title} gate`), tabs),
+                  checks.length
+                    ? el('ul', { class: 'checks' }, checks)
+                    : el(
+                        'p',
+                        { class: 'hint', style: 'padding:12px 14px' },
+                        st.status === 'running' ? 'Agent working; gate runs when it finishes.' : 'Not run yet.',
+                      ),
+                  att?.summary ? el('div', { class: 'summary' }, att.summary) : null,
+                  att?.error ? el('div', { class: 'summary s-failed' }, att.error) : null,
+                ),
+                el('div', { class: 'card' }, el('h3', {}, el('span', {}, att ? `Log · ${att.log}` : 'Log')), logPre),
+              ),
+              el('h2', { style: 'margin:24px 0 8px' }, 'Events'),
+              el(
+                'div',
+                { class: 'card' },
+                el(
+                  'ul',
+                  { class: 'events' },
+                  [...run.events].reverse().map((e) => el('li', {}, el('time', {}, new Date(e.at).toLocaleTimeString()), e.msg)),
+                ),
+              ),
+            ].filter(Boolean),
+          );
+
+          if (att) {
+            try {
+              const text = await api(`/api/runs/${run.id}/logs/${att.log}`);
+              const pre = $('#log');
+              if (pre) {
+                const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+                pre.textContent = text;
+                if (atBottom || state.logFor !== att.log) pre.scrollTop = pre.scrollHeight;
+                state.logFor = att.log;
+              }
+            } catch {
+              const pre = $('#log');
+              if (pre) pre.textContent = 'Log not available yet.';
+            }
+          }
+        }
+
+        async function refresh() {
+          try {
+            state.runs = await api('/api/runs');
+            if (!state.selected && state.runs[0]) state.selected = state.runs[0].id;
+            renderRuns();
+            state.run = state.selected ? await api(`/api/runs/${state.selected}`) : null;
+            await renderRun();
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        api('/api/project')
+          .then((p) => {
+            $('#proj').textContent = `${p.name} · ${p.template} · ${p.dir}`;
+          })
+          .catch(() => {});
+
+        const dlg = $('#dlg');
+        $('#newBtn').onclick = () => {
+          $('#formErr').textContent = '';
+          dlg.showModal();
+          $('#req').focus();
+        };
+        $('#cancel').onclick = () => dlg.close();
+        $('#form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          try {
+            const { id } = await api('/api/runs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ request: $('#req').value, executor: $('#exec').value, ship: $('#ship').checked }),
+            });
+            dlg.close();
+            $('#req').value = '';
+            state.selected = id;
+            state.stage = null;
+            state.attempt = null;
+            setTimeout(refresh, 600);
+          } catch (err) {
+            $('#formErr').textContent = err.message;
+          }
+        });
+
+        refresh();
+        setInterval(() => {
+          if (!document.hidden) refresh();
+        }, 2000);
+      })();
+    </script>
+  </body>
+</html>
