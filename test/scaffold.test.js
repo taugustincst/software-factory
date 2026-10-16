@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { scaffold, listTemplates, render, NAME_RE } from '../src/scaffold.js';
@@ -65,6 +65,43 @@ for (const template of ['static-html', 'fullstack', 'node-service', 'python-serv
     assert.match(log, /chore: scaffold demo-app/);
   });
 }
+
+test('test helpers provide a default git identity without overriding the environment', () => {
+  // helpers.js (imported above) sets these so git child processes work on
+  // machines with no git config; values from the real environment would win.
+  for (const key of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL']) {
+    assert.ok(process.env[key], `${key} is set`);
+  }
+});
+
+test('scaffolds and commits on a machine with no git identity at all', async () => {
+  // Hermetic child process: no GIT_* variables (helpers.js only patches this
+  // process), no global/system git config, and an empty HOME.
+  const script = path.join(tmp(), 'scaffold-child.mjs');
+  const target = path.join(tmp(), 'fresh-app');
+  writeFileSync(
+    script,
+    [
+      `import { scaffold } from ${JSON.stringify(new URL('../src/scaffold.js', import.meta.url).href)};`,
+      `import { execFileSync } from 'node:child_process';`,
+      `const { steps } = await scaffold({ template: 'static-html', name: 'fresh-app', dir: process.argv[2], owner: 'octo', install: false, git: true, claude: false });`,
+      `const author = execFileSync('git', ['log', '--format=%an <%ae>', '-1'], { cwd: process.argv[2], encoding: 'utf8' }).trim();`,
+      `console.log(JSON.stringify({ gitStep: steps.git, author }));`,
+      '',
+    ].join('\n'),
+  );
+  const env = {
+    PATH: process.env.PATH,
+    HOME: tmp('sf-empty-home-'),
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+  };
+  if (process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
+  const out = execFileSync(process.execPath, [script, target], { encoding: 'utf8', env });
+  const { gitStep, author } = JSON.parse(out.trim().split('\n').at(-1));
+  assert.equal(gitStep, 'ok');
+  assert.equal(author, 'software-factory <software-factory@localhost>');
+});
 
 test('refuses a non-empty target directory', async () => {
   const dir = tmp();

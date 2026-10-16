@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { ROOT } from '../util.js';
 import { listRuns, readRun, readLog, newRunId, RUN_ID_RE, LOG_NAME_RE } from '../pipeline/store.js';
+import { liveRunLock } from '../pipeline/lock.js';
 import { loadProject } from '../pipeline/project.js';
 
 const INDEX = path.join(ROOT, 'src', 'dashboard', 'index.html');
@@ -87,6 +88,13 @@ export function createDashboard({ dir, port, spawnRun = defaultSpawnRun }) {
         if (request.length < 10 || request.length > 20000)
           return send(res, 400, { error: 'request must be 10-20000 characters' });
         const executor = body.executor === 'mock' ? 'mock' : 'claude';
+        // One run at a time per repo: refuse while a live run holds the lock
+        // (stale locks do not count — runPipeline clears them on acquisition).
+        // The check races with the detached child actually starting, but the
+        // child's own lock acquisition in runPipeline is the backstop.
+        const holder = await liveRunLock(dir);
+        if (holder)
+          return send(res, 409, { error: `a factory run is already in progress: run ${holder.runId} (pid ${holder.pid})` });
         const id = newRunId();
         spawnRun({ dir, id, request, executor, ship: body.ship === true });
         return send(res, 202, { id });
