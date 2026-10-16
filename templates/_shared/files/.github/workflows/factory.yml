@@ -53,15 +53,15 @@ jobs:
       status: ${{ steps.factory.outputs.status }}
       run_id: ${{ steps.factory.outputs.run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         if: hashFiles('pyproject.toml') != ''
 
       - name: Install Claude Code
@@ -96,7 +96,7 @@ jobs:
           git diff --cached --binary > "$RUNNER_TEMP/out/change.patch"
           cp ".factory/runs/$RUN_ID/run.json" "$RUNNER_TEMP/out/run.json"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.factory.outputs.status == 'passed'
         with:
           name: factory-change
@@ -105,7 +105,7 @@ jobs:
 
       - name: Upload agent logs (private repositories only)
         if: always() && github.event.repository.private
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: factory-logs
           path: .factory/runs/
@@ -123,15 +123,15 @@ jobs:
     outputs:
       pr_url: ${{ steps.ship.outputs.pr_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.FACTORY_TOKEN || github.token }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: factory-change
           path: ${{ runner.temp }}/in
