@@ -76,17 +76,17 @@ push, and confirm CI goes green on `main`. Only then judge PR #1.
   scaffolded project and throws when there is no commit:
   `fatal: your current branch 'main' does not have any commits yet`.
 - `test/helpers.js` sets a local identity for its own temp repos, but nothing
-  provides the *global* identity the scaffold path relies on.
+  provides the _global_ identity the scaffold path relies on.
 - `.github/workflows/ci.yml`: the `smoke` job has a **Configure git** step;
   the `test` job does not. GitHub-hosted runners start with no identity.
 
 ### Local verification (Folder, fresh clone of `main`, 2026-10-15)
 
-| Environment | Result |
-|---|---|
-| No git identity (this VM's default `.gitconfig` has none) | `npm test` fails in `scaffold.test.js` with the exact `git log` / "does not have any commits yet" error above |
-| `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env set | 68/68 pass |
-| Clean `HOME` whose `.gitconfig` contains only `user.name = ci`, `user.email = ci@users.noreply.github.com` (what the patch adds in CI) | 68/68 pass |
+| Environment                                                                                                                            | Result                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| No git identity (this VM's default `.gitconfig` has none)                                                                              | `npm test` fails in `scaffold.test.js` with the exact `git log` / "does not have any commits yet" error above |
+| `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env set                                                                                             | 68/68 pass                                                                                                    |
+| Clean `HOME` whose `.gitconfig` contains only `user.name = ci`, `user.email = ci@users.noreply.github.com` (what the patch adds in CI) | 68/68 pass                                                                                                    |
 
 68 tests, 0 failures in both fixed configurations.
 
