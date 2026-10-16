@@ -3,6 +3,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+// Git identity for child processes (scaffold() makes a first commit, the pipeline
+// commits on a branch). CI runners and fresh machines have no global git config,
+// so default one here — this module is imported by the test files that shell out
+// to git. Values already set in the environment always win.
+process.env.GIT_AUTHOR_NAME ??= 'Test';
+process.env.GIT_AUTHOR_EMAIL ??= 'test@example.com';
+process.env.GIT_COMMITTER_NAME ??= 'Test';
+process.env.GIT_COMMITTER_EMAIL ??= 'test@example.com';
+
 export function tmp(prefix = 'sf-') {
   return mkdtempSync(path.join(tmpdir(), prefix));
 }

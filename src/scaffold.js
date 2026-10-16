@@ -150,8 +150,26 @@ export async function scaffold({
     const init = await run(['git', 'init', '-q', '-b', 'main'], { cwd: target });
     if (init.code === 0) {
       await run(['git', 'add', '-A'], { cwd: target });
+      // Fresh machines (and CI runners) may have no git identity at all, in which
+      // case `git commit` fails outright. Fall back to a factory identity for this
+      // one commit — passed with -c, so nothing is written to the user's config.
+      // GIT_AUTHOR_*/GIT_COMMITTER_* in the environment still take precedence over -c.
+      const identity = [];
+      if (
+        !process.env.GIT_AUTHOR_NAME ||
+        !process.env.GIT_AUTHOR_EMAIL ||
+        !process.env.GIT_COMMITTER_NAME ||
+        !process.env.GIT_COMMITTER_EMAIL
+      ) {
+        const [name, email] = await Promise.all([
+          run(['git', 'config', '--get', 'user.name'], { cwd: target }),
+          run(['git', 'config', '--get', 'user.email'], { cwd: target }),
+        ]);
+        if (name.code !== 0 || email.code !== 0)
+          identity.push('-c', 'user.name=software-factory', '-c', 'user.email=software-factory@localhost');
+      }
       const commit = await run(
-        ['git', 'commit', '-q', '-m', `chore: scaffold ${name} from software-factory ${template.id} template`],
+        ['git', ...identity, 'commit', '-q', '-m', `chore: scaffold ${name} from software-factory ${template.id} template`],
         { cwd: target },
       );
       steps.git = commit.code === 0 ? 'ok' : 'no-commit';
