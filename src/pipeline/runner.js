@@ -5,6 +5,9 @@ import { loadProject } from './project.js';
 import { selectStages } from './stages.js';
 import { gates, gatePassed, describeFailures, snapshot, VERDICT_RE } from './gates.js';
 import { newRunId, saveRun, appendLog, readRun } from './store.js';
+import { acquireRunLock } from './lock.js';
+
+export { RunLockError, liveRunLock, readRunLock } from './lock.js';
 
 export function titleFromRequest(request) {
   const first =
@@ -44,11 +47,27 @@ function uniqueArtifactDir(dir, date, slug, runId) {
 }
 
 /**
+ * Run the factory pipeline under the per-repo run lock (see lock.js). The lock is
+ * taken before anything is read or written and released in a finally, so it is
+ * freed on success, on a failed gate and on a thrown error alike. A second live
+ * run is rejected with RunLockError instead of contaminating this run's commit.
+ */
+export async function runPipeline(opts) {
+  const runId = opts.runId ?? newRunId();
+  const lock = await acquireRunLock(path.resolve(opts.dir), runId);
+  try {
+    return await runPipelineLocked({ ...opts, runId });
+  } finally {
+    await lock.release();
+  }
+}
+
+/**
  * Run the factory pipeline: setup → spec → plan → build → test → review → ship.
  * Each agent stage is retried with gate feedback up to `maxAttempts`; a review that
  * requests changes rewinds to build (up to `maxReviewLoops` times).
  */
-export async function runPipeline({
+async function runPipelineLocked({
   dir,
   request,
   executor,

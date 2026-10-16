@@ -1,10 +1,11 @@
 // Regression tests for issues found in the independent pre-release review.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdirSync, utimesSync } from 'node:fs';
+import { writeFileSync, mkdirSync, utimesSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { runPipeline, shipRun } from '../src/pipeline/runner.js';
+import { acquireRunLock, lockPath } from '../src/pipeline/lock.js';
 import { mockExecutor } from '../src/pipeline/executors.js';
 import { gates, gatePassed, changedFiles, VERDICT_RE } from '../src/pipeline/gates.js';
 import { scaffold } from '../src/scaffold.js';
@@ -163,6 +164,91 @@ test('shipRun commits a run that passed with --no-commit, and refuses failed run
   const bad = fixtureRepo({ commands: { test: 'node -e "process.exit(1)"' } });
   const failed = await runPipeline({ dir: bad.dir, request: REQUEST, executor: mockExecutor(), maxAttempts: 1 });
   await assert.rejects(shipRun({ dir: bad.dir, runId: failed.id }), /only passed runs/);
+});
+
+async function waitForLock(dir, timeoutMs = 5000) {
+  const file = lockPath(dir);
+  for (let waited = 0; waited < timeoutMs; waited += 10) {
+    if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8'));
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error('the run lock was never acquired');
+}
+
+test('concurrent runs: the second is rejected by the lock and cannot contaminate the first', async () => {
+  const { dir, git } = fixtureRepo();
+  const first = runPipeline({
+    dir,
+    request: REQUEST,
+    executor: mockExecutor({ delayMs: 300 }),
+    runId: '20261015-101010-aaaa',
+  });
+  const holder = await waitForLock(dir);
+  assert.equal(holder.runId, '20261015-101010-aaaa');
+  assert.equal(holder.pid, process.pid);
+  await assert.rejects(
+    runPipeline({ dir, request: '# Add billing\n\nBilling.', executor: mockExecutor(), runId: '20261015-101010-bbbb' }),
+    (err) => {
+      assert.equal(err.name, 'RunLockError');
+      assert.match(err.message, /already running/);
+      assert.match(err.message, /20261015-101010-aaaa/, 'the error names the holding run');
+      return true;
+    },
+  );
+  const state = await first;
+  assert.equal(state.status, 'passed', state.error);
+  assert.equal(existsSync(lockPath(dir)), false, 'lock is released when the run finishes');
+  const committed = git('show', '--name-only', '--format=', 'HEAD');
+  assert.match(committed, /add-export/);
+  assert.doesNotMatch(committed, /add-billing/, "the rejected run's files are not in the first run's commit");
+  assert.equal(git('status', '--porcelain').trim(), '', 'tree is clean afterwards');
+});
+
+test('a stale lock (dead pid) does not block a run, and the lock is released afterwards', async () => {
+  const { dir } = fixtureRepo();
+  const dead = spawnSync(process.execPath, ['-e', '']);
+  assert.ok(dead.pid > 0);
+  mkdirSync(path.dirname(lockPath(dir)), { recursive: true });
+  writeFileSync(
+    lockPath(dir),
+    JSON.stringify({ pid: dead.pid, runId: '20260101-000000-dead', acquiredAt: '2026-01-01T00:00:00.000Z' }),
+  );
+  const state = await runPipeline({ dir, request: REQUEST, executor: mockExecutor(), stages: ['spec'], commit: false });
+  assert.equal(state.status, 'passed', state.error);
+  assert.equal(existsSync(lockPath(dir)), false);
+});
+
+test('the run lock is released when a run fails its gates and when it throws', async () => {
+  const bad = fixtureRepo({ commands: { test: 'node -e "process.exit(1)"' } });
+  const failed = await runPipeline({ dir: bad.dir, request: REQUEST, executor: mockExecutor(), maxAttempts: 1 });
+  assert.equal(failed.status, 'failed');
+  assert.equal(existsSync(lockPath(bad.dir)), false, 'lock released after a failed run');
+
+  const { dir } = fixtureRepo();
+  const throwing = mockExecutor({
+    script: {
+      async spec() {
+        throw new Error('boom');
+      },
+    },
+  });
+  await assert.rejects(runPipeline({ dir, request: REQUEST, executor: throwing, maxAttempts: 1 }), /boom/);
+  assert.equal(existsSync(lockPath(dir)), false, 'lock released after a thrown error');
+});
+
+test('releasing a lock never removes a lock owned by another run', async () => {
+  const dir = tmp();
+  const lock = await acquireRunLock(dir, '20261015-101010-aaaa');
+  assert.equal(JSON.parse(readFileSync(lockPath(dir), 'utf8')).runId, '20261015-101010-aaaa');
+  // A successor takes over the file (e.g. this run was presumed stale).
+  writeFileSync(
+    lockPath(dir),
+    JSON.stringify({ pid: process.pid, runId: '20261015-101010-bbbb', acquiredAt: new Date().toISOString() }),
+  );
+  await lock.release();
+  assert.ok(existsSync(lockPath(dir)), "the successor's lock survives");
+  assert.equal(JSON.parse(readFileSync(lockPath(dir), 'utf8')).runId, '20261015-101010-bbbb');
+  rmSync(lockPath(dir), { force: true });
 });
 
 test('scaffold rejects descriptions and owners that would break generated files', async () => {

@@ -1,5 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import path from 'node:path';
 import { startDashboard } from '../src/dashboard/server.js';
 import { runPipeline } from '../src/pipeline/runner.js';
 import { mockExecutor } from '../src/pipeline/executors.js';
@@ -66,4 +68,26 @@ test('POST requires same origin and JSON, validates input, then starts a run', a
   assert.equal(spawned[0].id, id);
   assert.equal(spawned[0].executor, 'mock');
   assert.equal(spawned[0].ship, false);
+});
+
+test('POST returns 409 while a live run holds the lock, and starts nothing', async () => {
+  const lockFile = path.join(dir, '.factory', 'lock');
+  mkdirSync(path.dirname(lockFile), { recursive: true });
+  writeFileSync(
+    lockFile,
+    JSON.stringify({ pid: process.pid, runId: '20261015-101010-aaaa', acquiredAt: new Date().toISOString() }),
+  );
+  try {
+    const before = spawned.length;
+    const res = await fetch(`${url}/api/runs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: url },
+      body: JSON.stringify({ request: 'Add a dark mode toggle to settings', executor: 'mock' }),
+    });
+    assert.equal(res.status, 409);
+    assert.match((await res.json()).error, /20261015-101010-aaaa/);
+    assert.equal(spawned.length, before, 'no run was spawned');
+  } finally {
+    rmSync(lockFile, { force: true });
+  }
 });
