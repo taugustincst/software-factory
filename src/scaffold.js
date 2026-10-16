@@ -8,8 +8,8 @@ const BINARY_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.
 /** Files stored under a safe name in the template and renamed on output. */
 const RENAMES = { _gitignore: '.gitignore', _dockerignore: '.dockerignore', _npmrc: '.npmrc' };
 
-/** Pinned so generated repos run a known factory version in CI. */
-export const FACTORY_PACKAGE = 'github:taugustincst/software-factory#v0.1.0';
+/** Pinned to an immutable commit so generated repos run a known factory version in CI. Bump on release. */
+export const FACTORY_PACKAGE = 'github:taugustincst/software-factory#8b6723fb6ef340ffa6e8159b4d936559796dd5fb';
 
 export const DESCRIPTION_RE = /^[^"\\<>`$\n\r{}]{1,200}$/;
 export const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-9_.-]{1,100})?$/;
