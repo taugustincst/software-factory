@@ -80,6 +80,7 @@ async function runPipelineLocked({
   install = true,
   issue = null,
   allowDirty = false,
+  signal = null,
   runId = newRunId(),
   commandTimeoutMs = 15 * 60_000,
   onEvent = () => {},
@@ -115,6 +116,12 @@ async function runPipelineLocked({
     events: [],
   };
 
+  const cancelled = () => Boolean(signal?.aborted);
+  const finishCancelled = async (stageState = null) => {
+    if (stageState && stageState.status === 'running') stageState.status = 'pending';
+    await save('Run cancelled');
+    return finish('cancelled', 'cancelled by user');
+  };
   const save = async (msg) => {
     if (msg) state.events.push({ at: now(), msg });
     await saveRun(dir, state);
@@ -155,12 +162,14 @@ async function runPipelineLocked({
       review: path.join(artifactDir, 'REVIEW.md'),
     },
     commandTimeoutMs,
+    signal,
     baseline,
     log: null,
     attemptStartedMs: null,
     snapshotBefore: null,
   };
 
+  if (cancelled()) return finishCancelled();
   if (install && project.commands.install) {
     await save(`Installing dependencies: ${project.commands.install}`);
     const r = await exec(project.commands.install, { cwd: dir, timeoutMs: commandTimeoutMs });
@@ -173,6 +182,7 @@ async function runPipelineLocked({
   while (i < stages.length) {
     const stage = stages[i];
     const sState = state.stages[i];
+    if (cancelled()) return finishCancelled(sState);
 
     if (stage.deterministic) {
       sState.status = 'running';
@@ -192,6 +202,7 @@ async function runPipelineLocked({
     let rewind = false;
     let lastChecks = [];
     for (let n = 1; n <= maxAttempts && !passed; n++) {
+      if (cancelled()) return finishCancelled(sState);
       // Run-level spend cap (P1-5): per-stage caps bound one attempt, but retries
       // and review rewinds can stack them to ~$100. Stop before any further agent
       // spend once the run total reaches the cap; deterministic stages (ship)
@@ -227,6 +238,11 @@ async function runPipelineLocked({
       attempt.summary = String(result.summary ?? '').slice(0, 4000);
       attempt.error = result.error;
 
+      if (cancelled()) {
+        attempt.finishedAt = now();
+        attempt.error = 'cancelled while the agent was working';
+        return finishCancelled(sState);
+      }
       ctx.log = (line) => appendLog(dir, runId, logName, `${line}\n`).catch(() => {});
       await appendLog(dir, runId, logName, `\n# gate\n`);
       const checks = await gates[stage.id](ctx);

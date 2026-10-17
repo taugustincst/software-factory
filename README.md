@@ -131,7 +131,7 @@ Issue text reaches scripts only through environment variables, never `${{ }}` in
 
 ### Dashboard
 
-`factory dashboard` serves a local page showing every run, each stage's gate checks per attempt, live agent logs, events, cost, branch and PR link, plus a form to start new runs. It binds to 127.0.0.1 only, rejects foreign `Host` headers (DNS rebinding) and cross-origin POSTs (CSRF), and sends a strict CSP.
+`factory dashboard` serves a local page showing every run, each stage's gate checks per attempt, live agent logs, events, cost, branch and PR link, plus a form to start new runs. A running run can be cancelled from its detail page (the CLI stops cooperatively, saves the run as `cancelled` and releases the repo lock; Ctrl-C or SIGTERM does the same for terminal runs), and the detail page also shows the launcher output for dashboard-started runs. It binds to 127.0.0.1 only, rejects foreign `Host` headers (DNS rebinding) and cross-origin POSTs (CSRF), and sends a strict CSP.
 
 ## Safety model
 

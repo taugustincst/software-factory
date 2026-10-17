@@ -10,7 +10,7 @@ export const KIT_DIR = path.join(ROOT, 'claude-kit');
  * Run a process and capture output. `command` may be a string (run through the shell,
  * for user-configured commands from factory.json) or [file, ...args] (no shell).
  */
-export function run(command, { cwd, env, timeoutMs = 15 * 60_000, input, onData, onStdout, onStderr } = {}) {
+export function run(command, { cwd, env, timeoutMs = 15 * 60_000, input, onData, onStdout, onStderr, signal } = {}) {
   return new Promise((resolve) => {
     const useShell = typeof command === 'string';
     const [file, ...args] = useShell ? [command] : command;
@@ -23,11 +23,21 @@ export function run(command, { cwd, env, timeoutMs = 15 * 60_000, input, onData,
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    let aborted = false;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGTERM');
       setTimeout(() => child.kill('SIGKILL'), 5000).unref();
     }, timeoutMs);
+    const onAbort = () => {
+      aborted = true;
+      child.kill('SIGTERM');
+      setTimeout(() => child.kill('SIGKILL'), 5000).unref();
+    };
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
     child.stdout.on('data', (d) => {
       stdout += d;
       onData?.(String(d));
@@ -40,11 +50,13 @@ export function run(command, { cwd, env, timeoutMs = 15 * 60_000, input, onData,
     });
     child.on('error', (err) => {
       clearTimeout(timer);
-      resolve({ code: 127, stdout, stderr: stderr + String(err.message), timedOut });
+      signal?.removeEventListener('abort', onAbort);
+      resolve({ code: 127, stdout, stderr: stderr + String(err.message), timedOut, aborted });
     });
     child.on('close', (code) => {
       clearTimeout(timer);
-      resolve({ code: timedOut ? 124 : (code ?? 1), stdout, stderr, timedOut });
+      signal?.removeEventListener('abort', onAbort);
+      resolve({ code: aborted ? 130 : timedOut ? 124 : (code ?? 1), stdout, stderr, timedOut, aborted });
     });
     if (input !== undefined) child.stdin.end(input);
     else child.stdin.end();

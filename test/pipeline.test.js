@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { runPipeline, titleFromRequest } from '../src/pipeline/runner.js';
+import { runPipeline, titleFromRequest, liveRunLock } from '../src/pipeline/runner.js';
+import { run as procRun } from '../src/util.js';
 import { mockExecutor } from '../src/pipeline/executors.js';
 import { listRuns, readRun } from '../src/pipeline/store.js';
 import { fixtureRepo } from './helpers.js';
@@ -214,4 +215,38 @@ test('a run under its spend cap passes, and a disabled cap never stops a run', a
   assert.equal(offState.status, 'passed', offState.error);
   assert.equal(offState.costUsd, 500);
   assert.equal(offState.maxRunUsd, null);
+});
+
+test('a run can be cancelled: state saved as cancelled and the lock released', async () => {
+  const { dir } = fixtureRepo();
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 150);
+  const state = await runPipeline({
+    dir,
+    request: REQUEST,
+    executor: mockExecutor({ delayMs: 500 }),
+    signal: abort.signal,
+  });
+  clearTimeout(timer);
+  assert.equal(state.status, 'cancelled');
+  assert.equal(state.error, 'cancelled by user');
+  assert.ok(
+    state.stages.every((s) => s.status !== 'passed' || s.id === 'spec') || state.stages.some((s) => s.status === 'pending'),
+    'later stages never ran',
+  );
+  assert.equal(state.stages.filter((s) => s.attempts.length > 0).length, 1, 'only the in-flight stage was attempted');
+  assert.equal(await liveRunLock(dir), null, 'the repo lock is released after a cancel');
+  const saved = await readRun(dir, state.id);
+  assert.equal(saved.status, 'cancelled');
+});
+
+test('util run kills the child process when the AbortSignal fires', async () => {
+  const abort = new AbortController();
+  const started = Date.now();
+  const p = procRun(['node', '-e', 'setTimeout(() => {}, 30000)'], { signal: abort.signal });
+  setTimeout(() => abort.abort(), 100);
+  const r = await p;
+  assert.equal(r.aborted, true);
+  assert.equal(r.code, 130);
+  assert.ok(Date.now() - started < 10000, 'returned promptly after abort, not at the 30s sleep or 15m timeout');
 });

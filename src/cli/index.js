@@ -161,8 +161,22 @@ async function cmdRun(argv) {
     executor = claudeExecutor({ model: values.model, budgetMultiplier: mult });
   } else fail(`unknown executor "${values.executor}" (claude | mock)`);
 
+  // Ctrl-C / SIGTERM cancel the run cooperatively: the pipeline stops at its
+  // next checkpoint, kills any in-flight agent/gate process, saves the run as
+  // 'cancelled' and releases the repo lock. A second signal force-exits.
+  const abort = new AbortController();
+  let signals = 0;
+  const onSignal = (sig) => {
+    signals++;
+    if (signals > 1) process.exit(130);
+    process.stdout.write(`\n${sig} received; cancelling the run (again to force exit)\u2026\n`);
+    abort.abort();
+  };
+  process.on('SIGINT', onSignal);
+  process.on('SIGTERM', onSignal);
   const state = await runPipeline({
     dir: values.dir,
+    signal: abort.signal,
     request,
     executor,
     stages: values.stages
