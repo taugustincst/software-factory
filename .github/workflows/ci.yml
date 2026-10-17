@@ -30,6 +30,20 @@ jobs:
       - run: npm run lint
       - run: npm test
 
+  test-windows:
+    name: Unit tests (Windows, Node 24)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
   smoke:
     name: Template smoke (${{ matrix.template }})
     runs-on: ubuntu-latest
