@@ -91,3 +91,47 @@ test('POST returns 409 while a live run holds the lock, and starts nothing', asy
     rmSync(lockFile, { force: true });
   }
 });
+
+test('serves the launcher log for a run, and only that .txt name', async () => {
+  const file = path.join(dir, '.factory', 'runs', state.id, 'launcher.txt');
+  writeFileSync(file, 'launcher booted the run\n');
+  const ok = await fetch(`${url}/api/runs/${state.id}/logs/launcher.txt`);
+  assert.equal(ok.status, 200);
+  assert.match(await ok.text(), /launcher booted the run/);
+  assert.equal((await fetch(`${url}/api/runs/${state.id}/logs/notes.txt`)).status, 400);
+});
+
+test('cancel refuses finished or unknown runs (default signaler)', async () => {
+  const post = (id) =>
+    fetch(`${url}/api/runs/${id}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: url },
+    });
+  assert.equal((await post(state.id)).status, 409, 'a passed run cannot be cancelled');
+  assert.equal((await post('20260101-000000-abcd')).status, 404);
+  assert.equal((await fetch(`${url}/api/runs/${state.id}/cancel`, { method: 'POST', headers: {} })).status, 403, 'no Origin');
+});
+
+test('cancel signals the run process through the injected signaler', async () => {
+  const signalled = [];
+  const port2 = 40000 + Math.floor(Math.random() * 20000);
+  const dash = await startDashboard({
+    dir,
+    port: port2,
+    spawnRun: () => {},
+    signalRun: async ({ id }) => {
+      signalled.push(id);
+      return { status: 202, body: { id, signalledPid: 4242 } };
+    },
+  });
+  try {
+    const res = await fetch(`${dash.url}/api/runs/${state.id}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: dash.url },
+    });
+    assert.equal(res.status, 202);
+    assert.deepEqual(signalled, [state.id]);
+  } finally {
+    dash.server.close();
+  }
+});

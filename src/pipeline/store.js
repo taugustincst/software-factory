@@ -42,7 +42,9 @@ export async function readRun(dir, id) {
 }
 
 export async function readLog(dir, id, name) {
-  if (!LOG_NAME_RE.test(name)) throw new Error(`invalid log name: ${name}`);
+  // launcher.txt is written by the dashboard's spawner, not appendLog, so it is
+  // readable under its exact name only — the pattern stays strict for the rest.
+  if (name !== 'launcher.txt' && !LOG_NAME_RE.test(name)) throw new Error(`invalid log name: ${name}`);
   const file = path.join(runDir(dir, id), name);
   return existsSync(file) ? fs.readFile(file, 'utf8') : null;
 }

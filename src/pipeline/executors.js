@@ -69,7 +69,7 @@ export function guardSettings() {
 export function claudeExecutor({ model, budgetMultiplier = 1, timeoutMs = 45 * 60_000, bin = 'claude' } = {}) {
   return {
     name: 'claude',
-    async run({ stage, prompt, dir, onData }) {
+    async run({ stage, prompt, dir, ctx, onData }) {
       const system = await loadAgentPrompt(dir, stage.agent);
       const cap = (stage.budgetUsd ?? 2) * budgetMultiplier;
       const settingsFile = path.join(dir, '.factory', 'guard-settings.json');
@@ -113,7 +113,13 @@ export function claudeExecutor({ model, budgetMultiplier = 1, timeoutMs = 45 * 6
           }
         }
       };
-      const r = await run([bin, ...args], { cwd: dir, timeoutMs, onStdout: onChunk, onStderr: (d) => onData?.(d) });
+      const r = await run([bin, ...args], {
+        cwd: dir,
+        timeoutMs,
+        signal: ctx?.signal,
+        onStdout: onChunk,
+        onStderr: (d) => onData?.(d),
+      });
       onChunk('\n');
 
       const budgetHit = result?.terminal_reason === 'budget_exhausted' || result?.subtype === 'error_max_budget_usd';

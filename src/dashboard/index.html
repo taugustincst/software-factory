@@ -729,6 +729,26 @@
                 { class: 'run-head' },
                 el('h1', {}, run.title),
                 el('span', { class: `badge s-${run.status}` }, run.status),
+                run.status === 'running'
+                  ? el(
+                      'button',
+                      {
+                        type: 'button',
+                        style: 'margin-left:auto',
+                        onclick: async (ev) => {
+                          ev.target.disabled = true;
+                          ev.target.textContent = 'Cancelling…';
+                          try {
+                            await api(`/api/runs/${run.id}/cancel`, { method: 'POST' });
+                          } catch {
+                            /* the refresh below shows the outcome either way */
+                          }
+                          setTimeout(refresh, 400);
+                        },
+                      },
+                      'Cancel run',
+                    )
+                  : null,
               ),
               el(
                 'div',
@@ -765,6 +785,8 @@
                 ),
                 el('div', { class: 'card' }, el('h3', {}, el('span', {}, att ? `Log · ${att.log}` : 'Log')), logPre),
               ),
+              el('h2', { style: 'margin:24px 0 8px' }, 'Launcher output'),
+              el('div', { class: 'card' }, el('pre', { class: 'log', id: 'launcher-log' }, 'Loading…')),
               el('h2', { style: 'margin:24px 0 8px' }, 'Events'),
               el(
                 'div',
@@ -778,6 +800,17 @@
             ].filter(Boolean),
           );
 
+          if (state.launcherFor !== run.id) {
+            state.launcherFor = run.id;
+            try {
+              const text = await api(`/api/runs/${run.id}/logs/launcher.txt`);
+              const pre = $('#launcher-log');
+              if (pre) pre.textContent = text || '(launcher produced no output)';
+            } catch {
+              const pre = $('#launcher-log');
+              if (pre) pre.textContent = 'No launcher output — this run was not started from the dashboard.';
+            }
+          }
           if (att) {
             try {
               const text = await api(`/api/runs/${run.id}/logs/${att.log}`);

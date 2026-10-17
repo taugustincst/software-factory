@@ -34,7 +34,7 @@ async function commandCheck(ctx, key, { required = false } = {}) {
       required ? `no "${key}" command in factory.json` : 'not configured, skipped',
       required ? 'error' : 'warn',
     );
-  const r = await run(cmd, { cwd: ctx.dir, timeoutMs: ctx.commandTimeoutMs });
+  const r = await run(cmd, { cwd: ctx.dir, timeoutMs: ctx.commandTimeoutMs, signal: ctx.signal });
   ctx.log?.(`$ ${cmd} → exit ${r.code}`);
   return check(`${key}: ${cmd}`, r.code === 0, r.code === 0 ? 'passed' : tail(`${r.stdout}\n${r.stderr}`, 4000));
 }

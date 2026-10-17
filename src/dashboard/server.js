@@ -43,7 +43,7 @@ async function readJson(req) {
  * Local-only dashboard. Binds to 127.0.0.1, rejects foreign Host headers (DNS rebinding)
  * and cross-origin POSTs (CSRF), because starting a run executes agents in the repo.
  */
-export function createDashboard({ dir, port, spawnRun = defaultSpawnRun }) {
+export function createDashboard({ dir, port, spawnRun = defaultSpawnRun, signalRun = defaultSignalRun }) {
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
 
   return http.createServer(async (req, res) => {
@@ -73,7 +73,8 @@ export function createDashboard({ dir, port, spawnRun = defaultSpawnRun }) {
         return r ? send(res, 200, r) : send(res, 404, { error: 'not found' });
       }
       if (req.method === 'GET' && parts[0] === 'api' && parts[1] === 'runs' && parts[3] === 'logs' && parts.length === 5) {
-        if (!RUN_ID_RE.test(parts[2]) || !LOG_NAME_RE.test(parts[4])) return send(res, 400, { error: 'bad path' });
+        if (!RUN_ID_RE.test(parts[2]) || (parts[4] !== 'launcher.txt' && !LOG_NAME_RE.test(parts[4])))
+          return send(res, 400, { error: 'bad path' });
         const text = await readLog(dir, parts[2], parts[4]);
         return text === null ? send(res, 404, { error: 'not found' }) : send(res, 200, text, 'text/plain; charset=utf-8');
       }
@@ -99,11 +100,38 @@ export function createDashboard({ dir, port, spawnRun = defaultSpawnRun }) {
         spawnRun({ dir, id, request, executor, ship: body.ship === true });
         return send(res, 202, { id });
       }
+      if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'runs' && parts[3] === 'cancel' && parts.length === 4) {
+        if (!RUN_ID_RE.test(parts[2])) return send(res, 400, { error: 'bad run id' });
+        const origin = req.headers.origin;
+        if (!origin || !allowedHosts.has(origin.replace(/^https?:\/\//, '')))
+          return send(res, 403, { error: 'cross-origin request refused' });
+        const result = await signalRun({ dir, id: parts[2] });
+        return send(res, result.status, result.body);
+      }
       return send(res, 404, { error: 'not found' });
     } catch (err) {
       return send(res, err.status ?? 500, { error: err.status ? err.message : 'internal error' });
     }
   });
+}
+
+/**
+ * Cancel a running run: SIGTERM to the process holding the repo lock for this
+ * run id. The CLI turns that into a cooperative abort (state saved as
+ * 'cancelled', lock released); nothing here edits run state directly.
+ */
+async function defaultSignalRun({ dir, id }) {
+  const run = await readRun(dir, id);
+  if (!run) return { status: 404, body: { error: 'not found' } };
+  if (run.status !== 'running') return { status: 409, body: { error: `run is ${run.status}, not running` } };
+  const holder = await liveRunLock(dir);
+  if (!holder || holder.runId !== id) return { status: 409, body: { error: 'no live process holds the lock for this run' } };
+  try {
+    process.kill(holder.pid, 'SIGTERM');
+  } catch {
+    return { status: 409, body: { error: 'the run process is already gone' } };
+  }
+  return { status: 202, body: { id, signalledPid: holder.pid } };
 }
 
 function defaultSpawnRun({ dir, id, request, executor, ship }) {
