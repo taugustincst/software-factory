@@ -21,6 +21,7 @@ Usage
   factory ship --run-id <id> [--issue <n>]        Push and open a PR for a run that passed (CI ship job)
   factory runs [--dir <dir>]                     List pipeline runs
   factory dashboard [--dir <dir>] [--port 4545]  Open the pipeline dashboard
+  factory upgrade [--dir <dir>] [--dry-run]      Merge current template changes into an existing project
   factory doctor                                 Check required tools
 
 new options
@@ -52,6 +53,10 @@ run options
   --run-id <id>           Use a specific run id (used by the dashboard)
   --pause-after <stage>   Stop after this stage passes, saving the run as paused (e.g. spec)
   --resume <run-id>       Resume a paused run from its next stage (no --spec/--request needed)
+
+upgrade options
+  --dir <path>            Project to upgrade (default .)
+  --dry-run               Report what would change without writing anything
 `;
 
 function fail(msg) {
@@ -256,6 +261,70 @@ async function cmdShip(argv) {
   process.exit(ship.status === 'passed' ? 0 : 1);
 }
 
+async function cmdUpgrade(argv) {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      dir: { type: 'string', default: '.' },
+      'dry-run': { type: 'boolean' },
+    },
+  });
+  const dir = path.resolve(values.dir);
+  const dryRun = Boolean(values['dry-run']);
+  const { loadProject } = await import('../pipeline/project.js');
+  const project = await loadProject(dir);
+  if (project.inferred || !(await fs.stat(path.join(dir, 'factory.json')).catch(() => null))) {
+    fail('no factory.json here — factory upgrade works on projects scaffolded by the factory');
+  }
+  // Merging on top of uncommitted work would make the result unattributable;
+  // a dry run only reads, so it is allowed (and says so).
+  const statusResult = await run(['git', 'status', '--porcelain', '--', '.', ':(exclude).factory'], { cwd: dir });
+  const status = statusResult.code === 0 ? statusResult.stdout : null;
+  if (status !== null && status.trim() && !dryRun) {
+    fail('working tree has uncommitted changes; commit or stash them before upgrading (or use --dry-run to preview)');
+  }
+  if (status !== null && status.trim() && dryRun)
+    process.stdout.write('note: previewing against a dirty tree; a real upgrade requires a clean tree\n');
+
+  const { prepareBase, renderNewTemplate, mergeUpgrade, writeBaseSnapshot } = await import('../upgrade.js');
+  process.stdout.write(`Rendering the current ${project.template} template…\n`);
+  const rendered = await renderNewTemplate({ dir }).catch((e) => fail(e.message));
+  try {
+    const base = await prepareBase({ dir }).catch((e) => fail(e.message));
+    try {
+      process.stdout.write(`Merge base: ${base.source}\n`);
+      const report = await mergeUpgrade({ dir, baseDir: base.baseDir, newDir: rendered.newDir, dryRun });
+      const show = (label, items) => {
+        if (items.length) process.stdout.write(`  ${label}: ${items.join(', ')}\n`);
+      };
+      process.stdout.write(
+        `${dryRun ? 'Dry run' : 'Upgrade'} complete: ${report.updated.length} updated, ${report.added.length} added, ` +
+          `${report.merged.length} merged, ${report.removed.length} removed, ${report.kept.length} kept, ` +
+          `${report.conflicts.length} conflict(s), ${report.unchanged} unchanged\n`,
+      );
+      show('updated', report.updated);
+      show('added', report.added);
+      show('merged', report.merged);
+      show('removed', report.removed);
+      show('kept', report.kept);
+      show('CONFLICTS', report.conflicts);
+      if (!dryRun) {
+        await writeBaseSnapshot(dir, rendered.newDir, {
+          template: project.template,
+          upgradedAt: new Date().toISOString(),
+          at: new Date().toISOString(),
+        });
+        process.stdout.write('Review the changes and commit them; run the project checks before pushing.\n');
+      }
+      process.exit(report.conflicts.length ? 1 : 0);
+    } finally {
+      await base.cleanup();
+    }
+  } finally {
+    await rendered.cleanup();
+  }
+}
+
 async function cmdRuns(argv) {
   const { values } = parseArgs({ args: argv, options: { dir: { type: 'string', default: '.' } } });
   const runs = await listRuns(path.resolve(values.dir));
@@ -320,6 +389,8 @@ export async function main(argv) {
         return await cmdShip(rest);
       case 'runs':
         return await cmdRuns(rest);
+      case 'upgrade':
+        return await cmdUpgrade(rest);
       case 'dashboard':
         return await cmdDashboard(rest);
       case 'doctor':
