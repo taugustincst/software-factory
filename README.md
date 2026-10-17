@@ -118,7 +118,7 @@ Loop rules:
 
 ### From GitHub
 
-Every generated repo includes `.github/workflows/factory.yml`. Add an `ANTHROPIC_API_KEY` secret and a `factory` label; labelling an issue runs the pipeline and comments the PR link back on the issue. Use a `FACTORY_TOKEN` secret (fine-grained PAT or GitHub App token) if you want CI to run on factory PRs, because PRs opened with the default `GITHUB_TOKEN` do not trigger workflows.
+Every generated repo includes `.github/workflows/factory.yml`. Add an `ANTHROPIC_API_KEY` secret and a `factory` label; labelling an issue runs the pipeline and comments the PR link back on the issue. Make that secret a **dedicated, spend-capped key** (its own Anthropic workspace with a monthly limit), never a personal or unbounded one: the agent runs code with the key in its environment, so the cap is what bounds a misbehaving run, and a dedicated key can be revoked without breaking anything else. The build job also runs step-security/harden-runner in audit mode, logging every outbound connection; the workflow header explains how to tighten it to a blocking allowlist once you have a green run's audit log. Use a `FACTORY_TOKEN` secret (fine-grained PAT or GitHub App token) if you want CI to run on factory PRs, because PRs opened with the default `GITHUB_TOKEN` do not trigger workflows.
 
 The workflow treats issue text as untrusted input to an agent that can run code:
 

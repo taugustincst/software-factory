@@ -2,10 +2,26 @@
 # builds, tests and reviews the change, then opens a pull request for a human to merge.
 #
 # Setup (once per repo):
-#   1. Add the ANTHROPIC_API_KEY repository secret.
+#   1. Add the ANTHROPIC_API_KEY repository secret. Use a DEDICATED key for this —
+#      a separate Anthropic workspace/API key with a monthly spend limit set in the
+#      Anthropic console — never a personal or otherwise unbounded key. The agent
+#      runs code with this key in its environment; a capped, dedicated key bounds
+#      the damage if a run misbehaves, and it can be revoked without breaking
+#      anything else. Rotate it if you ever suspect misuse.
 #   2. Optional: add FACTORY_TOKEN (fine-grained PAT or GitHub App token with contents and
 #      pull-requests write). PRs opened with the default GITHUB_TOKEN do not trigger CI.
 #   3. Create the "factory" label. Only people with write access can trigger a run.
+#
+# Egress: the build job runs step-security/harden-runner in audit mode, which logs
+# every outbound connection the job makes (see the run's Network Events). Once you
+# have a green run's audit log, you can tighten it: set egress-policy to "block" and
+# add an allowed-endpoints list. A typical list for this workflow:
+#   api.anthropic.com:443        (the agent)
+#   registry.npmjs.org:443       (npm installs, the factory package, Claude Code)
+#   github.com:443, codeload.github.com:443, api.github.com:443, objects.githubusercontent.com:443
+#   pypi.org:443, files.pythonhosted.org:443   (python-service projects)
+# Check your own audit log before blocking: your project's install/test commands
+# may need endpoints this list does not have.
 #
 # Security design: issue text is untrusted input to an agent that can run code. So the agent
 # job gets read-only repo permissions, no persisted git credentials and no write token. A
@@ -53,6 +69,12 @@ jobs:
       status: ${{ steps.factory.outputs.status }}
       run_id: ${{ steps.factory.outputs.run_id }}
     steps:
+      # First step on purpose: audits (and can later block) all outbound traffic
+      # from this job, including anything the agent does with the API key.
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
