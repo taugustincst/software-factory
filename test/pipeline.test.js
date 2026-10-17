@@ -250,3 +250,43 @@ test('util run kills the child process when the AbortSignal fires', async () => 
   assert.equal(r.code, 130);
   assert.ok(Date.now() - started < 10000, 'returned promptly after abort, not at the 30s sleep or 15m timeout');
 });
+
+test('--pause-after stops with a resumable paused state; --resume finishes the same run', async () => {
+  const { dir, git } = fixtureRepo();
+  const paused = await runPipeline({ dir, request: REQUEST, executor: mockExecutor(), pauseAfter: 'spec' });
+  assert.equal(paused.status, 'paused');
+  assert.equal(paused.pausedAfter, 'spec');
+  assert.deepEqual(
+    paused.stages.map((s) => s.status),
+    ['passed', 'pending', 'pending', 'pending', 'pending', 'pending'],
+  );
+  assert.ok(existsSync(path.join(dir, paused.artifactDir, 'SPEC.md')), 'the spec artifact is on disk');
+
+  const resumed = await runPipeline({ dir, executor: mockExecutor(), resumeRunId: paused.id });
+  assert.equal(resumed.status, 'passed', resumed.error);
+  assert.equal(resumed.id, paused.id, 'resume keeps the original run id');
+  assert.equal(resumed.artifactDir, paused.artifactDir);
+  assert.equal((await listRuns(dir)).length, 1, 'still one run, not two');
+  const committed = git('show', '--name-only', '--format=', 'HEAD');
+  assert.match(committed, new RegExp(`${paused.artifactDir}/SPEC\\.md`), 'the paused run\u2019s spec is in the ship commit');
+  assert.equal(git('status', '--porcelain').trim(), '', 'clean tree after resume');
+});
+
+test('resume refuses runs that are not paused, and unknown ids', async () => {
+  const { dir } = fixtureRepo();
+  const done = await runPipeline({ dir, request: REQUEST, executor: mockExecutor() });
+  assert.equal(done.status, 'passed');
+  await assert.rejects(runPipeline({ dir, executor: mockExecutor(), resumeRunId: done.id }), /only paused runs can resume/);
+  await assert.rejects(runPipeline({ dir, executor: mockExecutor(), resumeRunId: '20260101-000000-abcd' }), /not found/);
+});
+
+test('resume still refuses foreign uncommitted changes, but not its own artifacts', async () => {
+  const { dir } = fixtureRepo();
+  const paused = await runPipeline({ dir, request: REQUEST, executor: mockExecutor(), pauseAfter: 'spec' });
+  writeFileSync(path.join(dir, 'unrelated.txt'), 'someone else\u2019s work\n');
+  const blocked = await runPipeline({ dir, executor: mockExecutor(), resumeRunId: paused.id });
+  assert.equal(blocked.status, 'paused', 'a refused resume leaves the run paused, not failed');
+  assert.equal((await readRun(dir, paused.id)).status, 'paused');
+  const ok = await runPipeline({ dir, executor: mockExecutor(), resumeRunId: paused.id, allowDirty: true });
+  assert.equal(ok.status, 'passed', ok.error);
+});
