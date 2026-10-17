@@ -2,12 +2,17 @@
   "title": "Full-stack web app",
   "stack": "React 19 · Vite · TypeScript · Fastify API · Vitest + Testing Library · Docker",
   "defaultDescription": "Full-stack web application",
-  "vars": { "codeqlLanguage": "javascript-typescript", "dependabotEcosystem": "npm", "releaseType": "node" },
+  "vars": {
+    "codeqlLanguage": "javascript-typescript",
+    "dependabotEcosystem": "npm",
+    "releaseType": "node"
+  },
   "commands": {
     "install": "npm install",
     "lint": "npm run lint",
     "typecheck": "npm run typecheck",
     "test": "npm test",
+    "coverage": "npx vitest run --coverage",
     "build": "npm run build",
     "dev": "npm run dev"
   },

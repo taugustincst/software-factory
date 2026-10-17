@@ -66,7 +66,7 @@ export function guardSettings() {
  * Permissions: acceptEdits plus an explicit per-stage tool allow-list. Guard hooks are always
  * injected (see guardSettings). Spend is capped per stage with --max-budget-usd.
  */
-export function claudeExecutor({ model, budgetMultiplier = 1, timeoutMs = 45 * 60_000, bin = 'claude' } = {}) {
+export function claudeExecutor({ model, reviewModel, budgetMultiplier = 1, timeoutMs = 45 * 60_000, bin = 'claude' } = {}) {
   return {
     name: 'claude',
     async run({ stage, prompt, dir, ctx, onData }) {
@@ -92,7 +92,10 @@ export function claudeExecutor({ model, budgetMultiplier = 1, timeoutMs = 45 * 6
         '--settings',
         settingsFile,
       ];
-      if (model) args.push('--model', model);
+      // A second pair of eyes: the review stage may run on a different model
+      // than the one that wrote the code (--review-model).
+      const stageModel = stage.id === 'review' && reviewModel ? reviewModel : model;
+      if (stageModel) args.push('--model', stageModel);
 
       let buffer = '';
       let result = null;
@@ -172,6 +175,10 @@ export function mockExecutor({ script = {}, delayMs = 0, costPerAttempt = 0 } = 
     },
     async build(ctx) {
       await write(path.join(ctx.dir, 'factory-mock', 'CHANGE.md'), `Mock change for run ${ctx.runId}: ${ctx.title}\n`);
+      await write(
+        path.join(ctx.dir, 'factory-mock', 'change.test.md'),
+        `# Mock test for: ${ctx.title}\n\nStands in for the tests a real build writes alongside its change.\n`,
+      );
     },
     async test() {},
     async review(ctx) {

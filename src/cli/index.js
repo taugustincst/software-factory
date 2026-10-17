@@ -39,6 +39,7 @@ run options
   --stages <list>         Subset, e.g. spec,plan (default: all: ${STAGES.map((s) => s.id).join(',')})
   --executor <name>       claude (default) | mock (offline demo, no API calls)
   --model <name>          Claude model for agent stages
+  --review-model <name>   Different model for the review stage (a second pair of eyes)
   --max-attempts <n>      Attempts per stage before failing (default 3)
   --max-review-loops <n>  Times a rejected review may send work back to build (default 2)
   --budget-multiplier <x> Scale per-stage spend caps (default 1)
@@ -133,6 +134,7 @@ async function cmdRun(argv) {
       stages: { type: 'string' },
       executor: { type: 'string', default: 'claude' },
       model: { type: 'string' },
+      'review-model': { type: 'string' },
       'max-attempts': { type: 'string', default: '3' },
       'max-review-loops': { type: 'string', default: '2' },
       'budget-multiplier': { type: 'string', default: '1' },
@@ -165,7 +167,7 @@ async function cmdRun(argv) {
     if (!(await which('claude'))) fail('Claude Code CLI not found. Install it: npm install -g @anthropic-ai/claude-code');
     const mult = Number(values['budget-multiplier']);
     if (!(mult > 0 && mult <= 20)) fail('--budget-multiplier must be > 0 and ≤ 20');
-    executor = claudeExecutor({ model: values.model, budgetMultiplier: mult });
+    executor = claudeExecutor({ model: values.model, reviewModel: values['review-model'], budgetMultiplier: mult });
   } else fail(`unknown executor "${values.executor}" (claude | mock)`);
 
   // Ctrl-C / SIGTERM cancel the run cooperatively: the pipeline stops at its

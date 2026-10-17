@@ -70,6 +70,7 @@ test('a rejected review rewinds to build with the findings, then passes', async 
       async build(ctx) {
         buildPrompts.push(ctx);
         writeFileSync(path.join(dir, 'src', `change-${buildPrompts.length}.js`), 'export const y = 2;\n');
+        writeFileSync(path.join(dir, 'src', 'change.test.js'), '// tests for the change\n');
       },
       async review(ctx) {
         reviews++;
@@ -137,6 +138,7 @@ test('secrets introduced by the build block the review gate', async () => {
     script: {
       async build() {
         writeFileSync(path.join(dir, 'src', 'config.js'), 'export const key = "AKIAABCDEFGHIJKLMNOP";\n');
+        writeFileSync(path.join(dir, 'src', 'config.test.js'), '// tests for the change\n');
       },
     },
   });
@@ -172,6 +174,45 @@ test('install failure stops the run before any agent runs', async () => {
   assert.equal(called, false);
 });
 
+test('a build that changes source but adds no tests now fails the build gate', async () => {
+  const { dir } = fixtureRepo();
+  const executor = mockExecutor({
+    script: {
+      async build() {
+        writeFileSync(path.join(dir, 'src', 'feature.js'), 'export const z = 3;\n');
+      },
+    },
+  });
+  const state = await runPipeline({ dir, request: REQUEST, executor, maxAttempts: 1 });
+  assert.equal(state.status, 'failed');
+  assert.match(state.error, /build gate failed/);
+  const gate = state.stages.find((s) => s.id === 'build').attempts[0].gate;
+  const check = gate.find((c) => c.name === 'tests added or changed');
+  assert.equal(check.ok, false);
+  assert.equal(check.severity, 'error', 'tests-added is an error now, not a warning');
+});
+
+test('coverage from factory.json is enforced at the test gate when configured', async () => {
+  const failing = fixtureRepo({
+    commands: { lint: 'node -e 0', test: 'node -e 0', coverage: 'node -e "process.exit(1)"' },
+  });
+  const state = await runPipeline({ dir: failing.dir, request: REQUEST, executor: mockExecutor(), maxAttempts: 1 });
+  assert.equal(state.status, 'failed');
+  assert.match(state.error, /test gate failed/);
+  const gate = state.stages.find((s) => s.id === 'test').attempts[0].gate;
+  assert.equal(gate.find((c) => c.name.startsWith('coverage:')).ok, false);
+
+  const unconfigured = fixtureRepo();
+  const okState = await runPipeline({ dir: unconfigured.dir, request: REQUEST, executor: mockExecutor() });
+  assert.equal(okState.status, 'passed', okState.error);
+  const okGate = okState.stages.find((s) => s.id === 'test').attempts[0].gate;
+  assert.ok(
+    okGate.some((c) => c.name.startsWith('test:') && c.ok),
+    'unconfigured projects run the plain test command',
+  );
+  assert.ok(!okGate.some((c) => c.name.startsWith('coverage')), 'and no coverage check appears');
+});
+
 test('run spend cap stops the run before further agent spend (--max-run-usd)', async () => {
   const { dir } = fixtureRepo();
   // $10 per attempt, $15 cap: spec ($10) and plan ($20 cumulative) run, then the
@@ -193,7 +234,6 @@ test('run spend cap stops the run before further agent spend (--max-run-usd)', a
   assert.equal(byId.build.status, 'failed');
   assert.equal(byId.build.attempts.length, 0, 'no build attempt may start once the cap is reached');
 });
-
 test('a run under its spend cap passes, and a disabled cap never stops a run', async () => {
   const under = fixtureRepo();
   const okState = await runPipeline({
@@ -216,7 +256,6 @@ test('a run under its spend cap passes, and a disabled cap never stops a run', a
   assert.equal(offState.costUsd, 500);
   assert.equal(offState.maxRunUsd, null);
 });
-
 test('a run can be cancelled: state saved as cancelled and the lock released', async () => {
   const { dir } = fixtureRepo();
   const abort = new AbortController();
@@ -239,7 +278,6 @@ test('a run can be cancelled: state saved as cancelled and the lock released', a
   const saved = await readRun(dir, state.id);
   assert.equal(saved.status, 'cancelled');
 });
-
 test('util run kills the child process when the AbortSignal fires', async () => {
   const abort = new AbortController();
   const started = Date.now();
@@ -250,7 +288,6 @@ test('util run kills the child process when the AbortSignal fires', async () => 
   assert.equal(r.code, 130);
   assert.ok(Date.now() - started < 10000, 'returned promptly after abort, not at the 30s sleep or 15m timeout');
 });
-
 test('--pause-after stops with a resumable paused state; --resume finishes the same run', async () => {
   const { dir, git } = fixtureRepo();
   const paused = await runPipeline({ dir, request: REQUEST, executor: mockExecutor(), pauseAfter: 'spec' });
@@ -271,7 +308,6 @@ test('--pause-after stops with a resumable paused state; --resume finishes the s
   assert.match(committed, new RegExp(`${paused.artifactDir}/SPEC\\.md`), 'the paused run\u2019s spec is in the ship commit');
   assert.equal(git('status', '--porcelain').trim(), '', 'clean tree after resume');
 });
-
 test('resume refuses runs that are not paused, and unknown ids', async () => {
   const { dir } = fixtureRepo();
   const done = await runPipeline({ dir, request: REQUEST, executor: mockExecutor() });
@@ -279,7 +315,6 @@ test('resume refuses runs that are not paused, and unknown ids', async () => {
   await assert.rejects(runPipeline({ dir, executor: mockExecutor(), resumeRunId: done.id }), /only paused runs can resume/);
   await assert.rejects(runPipeline({ dir, executor: mockExecutor(), resumeRunId: '20260101-000000-abcd' }), /not found/);
 });
-
 test('resume still refuses foreign uncommitted changes, but not its own artifacts', async () => {
   const { dir } = fixtureRepo();
   const paused = await runPipeline({ dir, request: REQUEST, executor: mockExecutor(), pauseAfter: 'spec' });

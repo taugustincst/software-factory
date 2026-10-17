@@ -75,6 +75,13 @@ export async function snapshot(dir) {
   return map;
 }
 
+const TEST_FILE_RE = /(^|\/)(tests?|__tests__|spec)\/|\.(test|spec)\.[a-z]+$|(^|\/)test_[^/]+\.py$/;
+
+/** Did the run's diff add or change any test file? Shared by the build and test gates. */
+export function testsTouched(files) {
+  return (files ?? []).some((f) => TEST_FILE_RE.test(f));
+}
+
 /** Read-only stages (spec, plan, review) may only write inside the spec folder. */
 async function onlyArtifactsChanged(ctx) {
   if (!ctx.snapshotBefore) return check('only spec-folder files changed', true, 'no baseline', 'warn');
@@ -153,6 +160,13 @@ export const gates = {
             source.length > 0,
             source.length ? `${source.length} file(s) changed` : 'no files changed outside the spec folder',
           ),
+      files === null
+        ? check('tests added or changed', true, 'not a git repo; cannot verify the diff', 'warn')
+        : check(
+            'tests added or changed',
+            testsTouched(files),
+            testsTouched(files) ? '' : 'no test files in the diff: new behavior ships with tests, not after them',
+          ),
       await commandCheck(ctx, 'lint'),
       await commandCheck(ctx, 'typecheck'),
       await commandCheck(ctx, 'build'),
@@ -161,10 +175,22 @@ export const gates = {
 
   async test(ctx) {
     const files = (await changedFiles(ctx.dir)) ?? [];
-    const testTouched = files.some((f) => /(^|\/)(tests?|__tests__|spec)\/|\.(test|spec)\.[a-z]+$|(^|\/)test_[^/]+\.py$/.test(f));
+    // Coverage enforcement comes from factory.json: when the project declares
+    // a `coverage` command, its exit code carries the threshold (every
+    // template ships one). A coverage run is a superset of a test run — same
+    // suite, plus the threshold — so it stands in for the plain test check
+    // rather than running the suite twice. Projects without one keep the
+    // old behavior exactly.
+    const suite = ctx.project.commands.coverage
+      ? await commandCheck(ctx, 'coverage', { required: true })
+      : await commandCheck(ctx, 'test', { required: true });
     return [
-      await commandCheck(ctx, 'test', { required: true }),
-      check('tests added or changed', testTouched, testTouched ? '' : 'no test files in the diff', 'warn'),
+      suite,
+      check(
+        'tests added or changed',
+        testsTouched(files),
+        testsTouched(files) ? '' : 'no test files in the diff: new behavior ships with tests, not after them',
+      ),
     ];
   },
 
