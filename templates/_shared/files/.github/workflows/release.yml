@@ -1,3 +1,10 @@
+# Releases are managed by release-please, which opens each release PR with
+# the default Actions token. GitHub blocks that until the repo allows it, so
+# every generated repo needs this one-time setting: Settings -> Actions ->
+# General -> Workflow permissions -> "Read and write permissions", with
+# "Allow GitHub Actions to create and approve pull requests" checked.
+# Without it, this workflow fails with: "GitHub Actions is not permitted to
+# create or approve pull requests."
 name: Release
 
 on:
