@@ -4,3 +4,4 @@ templates/**/files
 package-lock.json
 .factory
 docs/specs
+CHANGELOG.md
