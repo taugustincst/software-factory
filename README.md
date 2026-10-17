@@ -53,6 +53,8 @@ Every generated project also gets:
 - An example resource (tasks) showing the patterns to copy: schema validation at the edge, strict objects, consistent error bodies, a store interface, tests through the public API.
 - A clean first commit. The scaffolder formats rendered files, so `lint` passes on day one.
 
+**One setting to flip in each generated repo:** release-please opens the release PR with the default Actions token, which GitHub blocks until the repo allows it. In the new repo go to Settings → Actions → General → Workflow permissions, select **Read and write permissions** and check **Allow GitHub Actions to create and approve pull requests**. Without it the Release workflow fails with "GitHub Actions is not permitted to create or approve pull requests." The generated `release.yml` carries the same reminder in its header.
+
 `factory.json` is the contract between the project, CI, Claude and the pipeline:
 
 ```json
