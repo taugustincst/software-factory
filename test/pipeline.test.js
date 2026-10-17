@@ -170,3 +170,48 @@ test('install failure stops the run before any agent runs', async () => {
   assert.match(state.error, /install failed/);
   assert.equal(called, false);
 });
+
+test('run spend cap stops the run before further agent spend (--max-run-usd)', async () => {
+  const { dir } = fixtureRepo();
+  // $10 per attempt, $15 cap: spec ($10) and plan ($20 cumulative) run, then the
+  // run must stop before build spends anything.
+  const state = await runPipeline({
+    dir,
+    request: REQUEST,
+    executor: mockExecutor({ costPerAttempt: 10 }),
+    maxRunUsd: 15,
+  });
+  assert.equal(state.status, 'failed');
+  assert.match(state.error, /run spend cap reached/);
+  assert.match(state.error, /--max-run-usd/);
+  assert.equal(state.costUsd, 20);
+  assert.equal(state.maxRunUsd, 15);
+  const byId = Object.fromEntries(state.stages.map((s) => [s.id, s]));
+  assert.equal(byId.spec.status, 'passed');
+  assert.equal(byId.plan.status, 'passed');
+  assert.equal(byId.build.status, 'failed');
+  assert.equal(byId.build.attempts.length, 0, 'no build attempt may start once the cap is reached');
+});
+
+test('a run under its spend cap passes, and a disabled cap never stops a run', async () => {
+  const under = fixtureRepo();
+  const okState = await runPipeline({
+    dir: under.dir,
+    request: REQUEST,
+    executor: mockExecutor({ costPerAttempt: 1 }),
+    maxRunUsd: 15,
+  });
+  assert.equal(okState.status, 'passed', okState.error);
+  assert.equal(okState.costUsd, 5, 'five agent stages at $1 each');
+
+  const off = fixtureRepo();
+  const offState = await runPipeline({
+    dir: off.dir,
+    request: REQUEST,
+    executor: mockExecutor({ costPerAttempt: 100 }),
+    maxRunUsd: null,
+  });
+  assert.equal(offState.status, 'passed', offState.error);
+  assert.equal(offState.costUsd, 500);
+  assert.equal(offState.maxRunUsd, null);
+});
