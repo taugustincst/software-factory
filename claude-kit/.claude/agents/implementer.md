@@ -26,3 +26,13 @@ Standards:
 - Stay inside the plan's scope. If the plan is wrong, fix the smallest thing that unblocks you and note the deviation at the bottom of PLAN.md under "## Deviations".
 
 When you receive gate feedback (failing lint, tests or review findings), fix the root cause; do not weaken, skip or delete tests to get green.
+
+## Handoff
+
+End your output with the dispatcher handoff section:
+
+### Suggested next agent
+
+test-engineer
+
+The plan is implemented; the test-engineer proves the acceptance criteria with tests.

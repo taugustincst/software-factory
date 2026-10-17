@@ -148,3 +148,13 @@ Notes:
 ### Replies
 
 _Claude / Tj: add replies here._
+
+## 2026-10-17 — Folder: full merge of the Crew agent harness into the kit (branch feat/connect-agent-harness)
+
+At Tj's direction ("connect the software factory to my advanced agent harness — full merge"), the kit absorbs **My Brain Is Full — Crew** (taugustincst/My-Brain-Is-Full-Crew @ 238ae8c, MIT) as its agent layer:
+
+- Crew agents (8) and skills (14) were generated with the Crew's own claude-code adapter build and installed into `claude-kit/.claude/agents|skills` unchanged (capabilities → tool allow-lists, model tiers mapped by their adapter).
+- `.claude/DISPATCHER.md` (new) adapts the Crew dispatcher protocol to the merged harness: skills-first routing for both crews, `### Suggested next agent` chaining, call-chain tracking, max depth 3. The pipeline crew's stage agents each gained a Handoff section naming their next stage (a rejected review suggests implementer — the runner's rewind, documented).
+- The agent registry (`.claude/references/agents-registry.md`) is the upstream table plus the pipeline crew's 7 rows.
+- Provenance and a verbatim upstream snapshot live in `claude-kit/.claude/harness/` (UPSTREAM.md, LICENSE, crew/ — excluded from prettier). The factory guard hooks remain the only hooks wired in settings.json; Crew hook sources are vendored, not enabled (note in harness/README.md, with the re-sync procedure).
+- Tests: new test/harness.test.js (+4). A human merges, per convention.
