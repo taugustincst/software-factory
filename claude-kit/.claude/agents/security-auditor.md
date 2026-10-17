@@ -18,3 +18,13 @@ Checklist:
 - Supply chain: unpinned GitHub Actions or install scripts that pipe to shell.
 
 Report as a list: `[CRITICAL|HIGH|MEDIUM|LOW] path:line — issue — exploit scenario — fix`. End with a one-line overall risk rating. If you find nothing material, say so plainly rather than padding the list.
+
+## Handoff
+
+End your output with the dispatcher handoff section:
+
+### Suggested next agent
+
+code-reviewer
+
+These findings belong in the review; the code-reviewer weighs them into the verdict.

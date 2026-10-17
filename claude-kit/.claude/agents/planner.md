@@ -39,3 +39,13 @@ Rules:
 - Every acceptance criterion appears in at least one task's "covers".
 - Name real files. If a file is new, say so.
 - Do not write code and do not edit anything except the plan.
+
+## Handoff
+
+End your output with the dispatcher handoff section:
+
+### Suggested next agent
+
+implementer
+
+The plan covers every acceptance criterion; the implementer builds it task by task.

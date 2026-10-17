@@ -5,3 +5,4 @@ package-lock.json
 .factory
 docs/specs
 CHANGELOG.md
+claude-kit/.claude/harness/crew
