@@ -2,6 +2,7 @@ import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
 import { TEMPLATES_DIR, run } from './util.js';
 import { installClaudeKit } from './claude-kit.js';
+import { writeBaseSnapshot } from './upgrade-base.js';
 
 const TOKEN = /\{\{factory\.([a-zA-Z][\w]*)\}\}/g;
 const BINARY_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.pdf', '.zip']);
@@ -178,6 +179,20 @@ export async function scaffold({
     } else {
       steps.git = 'failed';
     }
+  }
+
+  // Record the pristine rendered tree so a later `factory upgrade` can
+  // three-way merge template changes against it. Lives in .factory/
+  // (git-ignored in every template); best-effort — an upgrade can also
+  // recover the base from the scaffold commit.
+  try {
+    await writeBaseSnapshot(target, target, {
+      template: template.id,
+      scaffoldedWith: FACTORY_PACKAGE,
+      at: new Date().toISOString(),
+    });
+  } catch {
+    log('Could not record the upgrade base snapshot (.factory/upgrade); upgrades can still use the git scaffold commit.');
   }
 
   return { target, template, vars, steps };

@@ -129,6 +129,10 @@ The workflow treats issue text as untrusted input to an agent that can run code:
 
 Issue text reaches scripts only through environment variables, never `${{ }}` interpolation.
 
+### Upgrading a project to the current templates
+
+`factory upgrade` brings an existing project up to the current template version without flattening local edits. It re-renders the project's template with the project's own values, then three-way merges: files you never touched fast-forward, files the template never changed keep your version, and files changed on both sides go through a real merge — clean merges apply, true conflicts leave markers (or a `<file>.factory-new` copy for binaries) and exit non-zero. The merge base is the pristine snapshot recorded at scaffold time in `.factory/upgrade/`, or, for older projects, the scaffold commit recovered from git history. Lockfiles are never touched, a clean tree is required (commit or stash first), and `--dry-run` reports the whole plan without writing. Afterwards the snapshot is refreshed, so the next upgrade merges against the new base.
+
 ### Dashboard
 
 `factory dashboard` serves a local page showing every run, each stage's gate checks per attempt, live agent logs, events, cost, branch and PR link, plus a form to start new runs. It binds to 127.0.0.1 only, rejects foreign `Host` headers (DNS rebinding) and cross-origin POSTs (CSRF), and sends a strict CSP.
@@ -159,6 +163,7 @@ factory run (--spec <file> | --request <text>) [--dir] [--stages spec,plan,…] 
 factory ship --run-id <id> [--issue <n>] [--no-push]
 factory runs [--dir]
 factory dashboard [--dir] [--port 4545]
+factory upgrade [--dir] [--dry-run]
 factory doctor
 ```
 
