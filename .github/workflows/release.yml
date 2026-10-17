@@ -15,3 +15,6 @@ jobs:
       - uses: googleapis/release-please-action@v5
         with:
           release-type: node
+          # First release starts at the package.json version (0.1.0), not
+          # release-please's 1.0.0 default. Remove this line once v0.1.0 ships.
+          release-as: 0.1.0
