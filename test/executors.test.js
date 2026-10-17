@@ -7,8 +7,13 @@ import { STAGES } from '../src/pipeline/stages.js';
 import { tmp } from './helpers.js';
 
 const FAKE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-claude.sh');
+// The fake claude is a POSIX shell script, which Windows cannot spawn. The
+// executor logic it exercises is platform-independent; on Windows the real
+// binary is claude.exe. (Running .cmd shims like npm's claude.cmd through
+// util.run is a separate follow-up.)
+const SKIP_FAKE = process.platform === 'win32' ? 'fake claude is a POSIX shell script' : false;
 
-test('claude executor parses stream-json, streams readable log lines and reports cost', async () => {
+test('claude executor parses stream-json, streams readable log lines and reports cost', { skip: SKIP_FAKE }, async () => {
   const lines = [];
   const stage = STAGES.find((s) => s.id === 'spec');
   const r = await claudeExecutor({ bin: FAKE }).run({ stage, prompt: 'x', dir: tmp(), onData: (d) => lines.push(d) });
