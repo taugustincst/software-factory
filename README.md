@@ -110,7 +110,7 @@ Loop rules:
 
 - A failed gate sends its exact failure output back to the same agent (default 3 attempts per stage).
 - A review that requests changes **rewinds to build** with the findings, then re-runs test and review (default 2 loops).
-- Every stage has a spend cap (`--max-budget-usd`); `--budget-multiplier` scales them. Cost is tracked per attempt and per run.
+- Every stage has a spend cap (`--max-budget-usd`); `--budget-multiplier` scales them. Cost is tracked per attempt and per run, and `--max-run-usd` (default $15, 0 disables) stops the run once total agent spend reaches it — retries and review rewinds cannot stack per-stage caps into an unbounded bill.
 - Artifacts are committed with the change: `docs/specs/<date>-<slug>/SPEC.md`, `PLAN.md`, `REVIEW.md`. Run state and logs live in `.factory/runs/<id>/` (git-ignored).
 - Nothing merges itself. The PR body carries the acceptance criteria, gate results, review verdict and cost for a human to approve.
 
@@ -155,7 +155,7 @@ factory new <name> -t <template> [--dir] [--owner] [--description] [--no-install
 factory templates
 factory install-claude [dir] [--force]
 factory run (--spec <file> | --request <text>) [--dir] [--stages spec,plan,…] [--executor claude|mock] [--model]
-            [--max-attempts 3] [--max-review-loops 2] [--budget-multiplier 1] [--ship] [--issue <n>] [--no-commit] [--no-install] [--allow-dirty]
+            [--max-attempts 3] [--max-review-loops 2] [--budget-multiplier 1] [--max-run-usd 15] [--ship] [--issue <n>] [--no-commit] [--no-install] [--allow-dirty]
 factory ship --run-id <id> [--issue <n>] [--no-push]
 factory runs [--dir]
 factory dashboard [--dir] [--port 4545]

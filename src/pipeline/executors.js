@@ -142,7 +142,7 @@ export function claudeExecutor({ model, budgetMultiplier = 1, timeoutMs = 45 * 6
  * that satisfy each gate so the whole pipeline, dashboard and ship flow can be exercised
  * without an API key. `script` can override behaviour per stage and attempt.
  */
-export function mockExecutor({ script = {}, delayMs = 0 } = {}) {
+export function mockExecutor({ script = {}, delayMs = 0, costPerAttempt = 0 } = {}) {
   const attempts = {};
   const write = async (file, text) => {
     await fs.mkdir(path.dirname(file), { recursive: true });
@@ -186,7 +186,7 @@ export function mockExecutor({ script = {}, delayMs = 0 } = {}) {
       return {
         ok: out.ok ?? true,
         summary: out.summary ?? `mock ${stage.id} done`,
-        costUsd: 0,
+        costUsd: out.costUsd ?? costPerAttempt,
         turns: 0,
         raw: '',
         error: out.error ?? null,

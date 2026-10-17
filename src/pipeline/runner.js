@@ -76,6 +76,7 @@ async function runPipelineLocked({
   maxReviewLoops = 2,
   ship = false,
   commit = true,
+  maxRunUsd = 15,
   install = true,
   issue = null,
   allowDirty = false,
@@ -105,6 +106,7 @@ async function runPipelineLocked({
     branch: null,
     prUrl: null,
     costUsd: 0,
+    maxRunUsd: typeof maxRunUsd === 'number' && maxRunUsd > 0 ? maxRunUsd : null,
     reviewLoops: 0,
     startedAt: now(),
     finishedAt: null,
@@ -190,6 +192,19 @@ async function runPipelineLocked({
     let rewind = false;
     let lastChecks = [];
     for (let n = 1; n <= maxAttempts && !passed; n++) {
+      // Run-level spend cap (P1-5): per-stage caps bound one attempt, but retries
+      // and review rewinds can stack them to ~$100. Stop before any further agent
+      // spend once the run total reaches the cap; deterministic stages (ship)
+      // cost nothing and are not blocked.
+      if (state.maxRunUsd !== null && state.costUsd >= state.maxRunUsd) {
+        sState.status = 'failed';
+        await save(`Run spend cap reached: $${state.costUsd.toFixed(2)} of $${state.maxRunUsd.toFixed(2)} (--max-run-usd)`);
+        return finish(
+          'failed',
+          `run spend cap reached: $${state.costUsd.toFixed(2)} spent of $${state.maxRunUsd.toFixed(2)} cap (--max-run-usd); ` +
+            'raise --max-run-usd or the per-stage budgets to let the run spend more',
+        );
+      }
       const logName = `${stage.id}-${sState.attempts.length + 1}.log`;
       const attempt = { n: sState.attempts.length + 1, startedAt: now(), log: logName, feedback: feedbackFor[stage.id] ?? null };
       sState.attempts.push(attempt);

@@ -42,6 +42,7 @@ run options
   --max-attempts <n>      Attempts per stage before failing (default 3)
   --max-review-loops <n>  Times a rejected review may send work back to build (default 2)
   --budget-multiplier <x> Scale per-stage spend caps (default 1)
+  --max-run-usd <usd>     Stop the run when total agent spend reaches this cap (default 15; 0 disables)
   --ship                  Push the branch and open a pull request with gh
   --no-commit             Leave changes uncommitted
   --no-install            Skip the install command
@@ -133,6 +134,7 @@ async function cmdRun(argv) {
       'max-attempts': { type: 'string', default: '3' },
       'max-review-loops': { type: 'string', default: '2' },
       'budget-multiplier': { type: 'string', default: '1' },
+      'max-run-usd': { type: 'string', default: '15' },
       ship: { type: 'boolean' },
       'no-commit': { type: 'boolean' },
       'no-install': { type: 'boolean' },
@@ -168,6 +170,11 @@ async function cmdRun(argv) {
       .map((s) => s.trim())
       .filter(Boolean),
     maxAttempts: int('max-attempts', 1, 10),
+    maxRunUsd: (() => {
+      const cap = Number(values['max-run-usd']);
+      if (!Number.isFinite(cap) || cap < 0 || cap > 100000) fail('--max-run-usd must be a number from 0 (disabled) to 100000');
+      return cap === 0 ? null : cap;
+    })(),
     maxReviewLoops: int('max-review-loops', 0, 5),
     ship: Boolean(values.ship),
     commit: !values['no-commit'],
