@@ -58,3 +58,18 @@ test('every agent run gets the guard hooks via --settings, using absolute paths'
     assert.ok(path.isAbsolute(file) && existsSync(file), file);
   }
 });
+
+test('claude executor uses the review model only for the review stage', async () => {
+  const argvFile = path.join(tmp(), 'argv.txt');
+  process.env.FAKE_ARGV_FILE = argvFile;
+  const FAKE_ARGV = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-claude-argv.sh');
+  const executor = claudeExecutor({ bin: FAKE_ARGV, model: 'model-a', reviewModel: 'model-b' });
+  const { readFileSync } = await import('node:fs');
+  const buildStage = STAGES.find((s) => s.id === 'build');
+  await executor.run({ stage: buildStage, prompt: 'x', dir: tmp() });
+  assert.match(readFileSync(argvFile, 'utf8'), /--model\nmodel-a/);
+  const reviewStage = STAGES.find((s) => s.id === 'review');
+  await executor.run({ stage: reviewStage, prompt: 'x', dir: tmp() });
+  assert.match(readFileSync(argvFile, 'utf8'), /--model\nmodel-b/);
+  delete process.env.FAKE_ARGV_FILE;
+});

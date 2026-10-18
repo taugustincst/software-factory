@@ -37,6 +37,7 @@ test('secret scan finds secrets in subfolder runs and non-ASCII files', async ()
     script: {
       async build() {
         writeFileSync(path.join(pkg, 'café.js'), 'const password = "Sup3rS3cretValue!";\n');
+        writeFileSync(path.join(pkg, 'café.test.js'), '// tests for the change\n');
       },
     },
   });

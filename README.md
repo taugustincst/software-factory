@@ -96,20 +96,21 @@ factory run --spec issue.md --ship --issue 42      # push a branch and open a PR
 factory dashboard                                    # http://127.0.0.1:4545
 ```
 
-| Stage  | Agent         | Gate (deterministic; never trusts the agent's own claim)                                                                                                                                           |
-| ------ | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| setup  | —             | Working tree is clean (or `--allow-dirty`), then `install` succeeds                                                                                                                                |
-| spec   | spec-writer   | `SPEC.md` written this attempt, with Problem, numbered Requirements, checklist Acceptance Criteria, Out of Scope; nothing outside the spec folder changed                                          |
-| plan   | planner       | `PLAN.md` written this attempt, with Tasks, Test Strategy, Risks; **every AC ID appears in the Tasks section**; nothing outside the spec folder changed                                            |
-| build  | implementer   | Source files changed; `lint`, `typecheck`, `build` pass                                                                                                                                            |
-| test   | test-engineer | `test` passes (warns if no test files changed)                                                                                                                                                     |
-| review | code-reviewer | `REVIEW.md` written this attempt with a single `Verdict: APPROVE` line, no `[BLOCKER]` items, nothing outside the spec folder changed, **no secrets or PHI in any changed file**, tests still pass |
-| ship   | —             | Feature branch `factory/<slug>-<id>`, Conventional Commit; with `--ship`: push and `gh pr create`                                                                                                  |
+| Stage  | Agent         | Gate (deterministic; never trusts the agent's own claim)                                                                                                                                                                                                                             |
+| ------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| setup  | —             | Working tree is clean (or `--allow-dirty`), then `install` succeeds                                                                                                                                                                                                                  |
+| spec   | spec-writer   | `SPEC.md` written this attempt, with Problem, numbered Requirements, checklist Acceptance Criteria, Out of Scope; nothing outside the spec folder changed                                                                                                                            |
+| plan   | planner       | `PLAN.md` written this attempt, with Tasks, Test Strategy, Risks; **every AC ID appears in the Tasks section**; nothing outside the spec folder changed                                                                                                                              |
+| build  | implementer   | Source files changed **and test files added or changed**; `lint`, `typecheck`, `build` pass                                                                                                                                                                                          |
+| test   | test-engineer | The suite passes and tests were added or changed. When `factory.json` declares a `coverage` command (every template ships one carrying its threshold), that run — the full suite plus the coverage threshold — stands in for the plain `test` run instead of running the suite twice |
+| review | code-reviewer | `REVIEW.md` written this attempt with a single `Verdict: APPROVE` line, no `[BLOCKER]` items, nothing outside the spec folder changed, **no secrets or PHI in any changed file**, tests still pass                                                                                   |
+| ship   | —             | Feature branch `factory/<slug>-<id>`, Conventional Commit; with `--ship`: push and `gh pr create`                                                                                                                                                                                    |
 
 Loop rules:
 
 - A failed gate sends its exact failure output back to the same agent (default 3 attempts per stage).
 - A review that requests changes **rewinds to build** with the findings, then re-runs test and review (default 2 loops).
+- `--review-model <name>` runs the review stage on a different model than the one that wrote the code — a second pair of eyes instead of self-review.
 - Every stage has a spend cap (`--max-budget-usd`); `--budget-multiplier` scales them. Cost is tracked per attempt and per run, and `--max-run-usd` (default $15, 0 disables) stops the run once total agent spend reaches it — retries and review rewinds cannot stack per-stage caps into an unbounded bill.
 - Artifacts are committed with the change: `docs/specs/<date>-<slug>/SPEC.md`, `PLAN.md`, `REVIEW.md`. Run state and logs live in `.factory/runs/<id>/` (git-ignored).
 - Nothing merges itself. The PR body carries the acceptance criteria, gate results, review verdict and cost for a human to approve.
@@ -159,6 +160,7 @@ factory run (--spec <file> | --request <text>) [--dir] [--stages spec,plan,…] 
             [--max-attempts 3] [--max-review-loops 2] [--budget-multiplier 1] [--max-run-usd 15] [--ship] [--issue <n>] [--no-commit] [--no-install] [--allow-dirty]
             [--max-attempts 3] [--max-review-loops 2] [--budget-multiplier 1] [--ship] [--issue <n>] [--no-commit] [--no-install] [--allow-dirty]
             [--pause-after <stage>] [--resume <run-id>]
+            [--model <name>] [--review-model <name>]
 factory ship --run-id <id> [--issue <n>] [--no-push]
 factory runs [--dir]
 factory dashboard [--dir] [--port 4545]

@@ -1,6 +1,6 @@
 {
   "title": "Node integration service",
-  "stack": "Node 24 \u00b7 TypeScript \u00b7 Fastify \u00b7 Zod \u00b7 Vitest \u00b7 Docker",
+  "stack": "Node 24 · TypeScript · Fastify · Zod · Vitest · Docker",
   "defaultDescription": "HTTP integration service",
   "vars": {
     "codeqlLanguage": "javascript-typescript",
@@ -12,6 +12,7 @@
     "lint": "npm run lint",
     "typecheck": "npm run typecheck",
     "test": "npm test",
+    "coverage": "npx vitest run --coverage",
     "build": "npm run build",
     "dev": "npm run dev"
   },
