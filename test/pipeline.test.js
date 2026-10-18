@@ -259,14 +259,23 @@ test('a run under its spend cap passes, and a disabled cap never stops a run', a
 test('a run can be cancelled: state saved as cancelled and the lock released', async () => {
   const { dir } = fixtureRepo();
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), 150);
+  // Abort from inside the first attempt: a wall-clock timer races pipeline
+  // setup (fast on Linux, slow on Windows) and can fire before any stage
+  // starts, which made this test platform-flaky.
+  const inner = mockExecutor({ delayMs: 500 });
+  const executor = {
+    ...inner,
+    async run(ctx) {
+      abort.abort();
+      return inner.run(ctx);
+    },
+  };
   const state = await runPipeline({
     dir,
     request: REQUEST,
-    executor: mockExecutor({ delayMs: 500 }),
+    executor,
     signal: abort.signal,
   });
-  clearTimeout(timer);
   assert.equal(state.status, 'cancelled');
   assert.equal(state.error, 'cancelled by user');
   assert.ok(
