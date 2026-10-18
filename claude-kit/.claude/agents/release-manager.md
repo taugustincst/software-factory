@@ -15,3 +15,13 @@ You prepare shippable pull requests.
 3. Verify locally that lint and tests pass using the commands in factory.json before declaring ready.
 
 Never push to protected branches, never force-push, and never merge. Opening the PR is where your job ends; a human approves the merge.
+
+## Handoff
+
+End your output with the dispatcher handoff section:
+
+### Suggested next agent
+
+None.
+
+End of the chain — the release-manager ships the change and there is no next agent.

@@ -45,3 +45,13 @@ Rules:
 - Keep scope to what the request asks. Push extras into Out of Scope.
 - If the domain involves patient, member or personal data, add a Non-Functional line that test data must be synthetic and no PHI may be logged.
 - Do not write code. Do not edit files other than the spec.
+
+## Handoff
+
+End your output with the dispatcher handoff section:
+
+### Suggested next agent
+
+planner
+
+The spec is complete and gated; the planner turns it into a task-by-task plan.

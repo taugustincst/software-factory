@@ -45,3 +45,13 @@ Rules:
 - Use REQUEST_CHANGES if and only if there is at least one BLOCKER. A BLOCKER is a correctness bug, a security issue, an unmet acceptance criterion, or a missing test for one.
 - Every finding names a file and line, and says what to do.
 - Do not modify source code. Only write REVIEW.md.
+
+## Handoff
+
+End your output with the dispatcher handoff section:
+
+### Suggested next agent
+
+release-manager
+
+On APPROVE, the release-manager ships it. On REJECT, suggest implementer instead — the rewind the pipeline performs automatically.

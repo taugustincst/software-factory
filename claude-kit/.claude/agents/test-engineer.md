@@ -20,3 +20,13 @@ Rules:
 - Never delete, skip, or loosen an assertion to make the suite pass.
 - Tests are deterministic: no real network, no wall-clock sleeps, no order dependence. Fake time and I/O.
 - Fixtures use synthetic data only.
+
+## Handoff
+
+End your output with the dispatcher handoff section:
+
+### Suggested next agent
+
+code-reviewer
+
+The suite is green; the code-reviewer gives the change an independent review.
