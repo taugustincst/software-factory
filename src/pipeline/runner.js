@@ -53,7 +53,7 @@ function uniqueArtifactDir(dir, date, slug, runId) {
  * run is rejected with RunLockError instead of contaminating this run's commit.
  */
 export async function runPipeline(opts) {
-  const runId = opts.runId ?? newRunId();
+  const runId = opts.runId ?? opts.resumeRunId ?? newRunId();
   const lock = await acquireRunLock(path.resolve(opts.dir), runId);
   try {
     return await runPipelineLocked({ ...opts, runId });
@@ -77,6 +77,8 @@ async function runPipelineLocked({
   ship = false,
   commit = true,
   maxRunUsd = 15,
+  pauseAfter = null,
+  resumeRunId = null,
   install = true,
   issue = null,
   allowDirty = false,
@@ -87,14 +89,27 @@ async function runPipelineLocked({
 }) {
   dir = path.resolve(dir);
   const project = await loadProject(dir);
-  const title = titleFromRequest(request);
+
+  // Resume rehydrates a paused run instead of starting a new one: same id,
+  // same artifacts, same stage history. Only 'paused' runs may resume.
+  let saved = null;
+  if (resumeRunId) {
+    saved = await readRun(dir, resumeRunId);
+    if (!saved) throw new Error(`run ${resumeRunId} not found in ${dir}/.factory/runs`);
+    if (saved.status !== 'paused')
+      throw new Error(`run ${resumeRunId} has status "${saved.status}"; only paused runs can resume`);
+    request = saved.request;
+    ship = ship || saved.ship === true;
+  }
+
+  const title = saved ? saved.title : titleFromRequest(request);
   const slug = slugify(title);
   const date = runId.slice(0, 8);
-  const artifactDir = uniqueArtifactDir(dir, date, slug, runId);
+  const artifactDir = saved ? path.join(dir, saved.artifactDir) : uniqueArtifactDir(dir, date, slug, runId);
   const rel = (p) => path.relative(dir, p).split(path.sep).join('/');
-  const stages = selectStages(stageIds);
+  const stages = selectStages(saved ? saved.stages.map((s) => s.id) : stageIds);
 
-  const state = {
+  const state = saved ?? {
     id: runId,
     title,
     request: request.slice(0, 20000),
@@ -104,6 +119,7 @@ async function runPipelineLocked({
     artifactDir: rel(artifactDir),
     issue,
     ship,
+    commit,
     branch: null,
     prUrl: null,
     costUsd: 0,
@@ -112,9 +128,17 @@ async function runPipelineLocked({
     startedAt: now(),
     finishedAt: null,
     error: null,
+    pausedAfter: null,
     stages: stages.map((s) => ({ id: s.id, title: s.title, agent: s.agent ?? null, status: 'pending', attempts: [] })),
     events: [],
   };
+  if (saved) {
+    state.status = 'running';
+    state.finishedAt = null;
+    state.error = null;
+    state.executor = executor.name;
+    state.ship = ship;
+  }
 
   const cancelled = () => Boolean(signal?.aborted);
   const finishCancelled = async (stageState = null) => {
@@ -127,6 +151,13 @@ async function runPipelineLocked({
     await saveRun(dir, state);
     onEvent(state, msg);
   };
+  const finishPaused = async (stageId) => {
+    state.status = 'paused';
+    state.pausedAfter = stageId;
+    state.finishedAt = now();
+    await save(`Run paused after ${stageId}; resume with: factory run --resume ${state.id}`);
+    return state;
+  };
   const finish = async (status, error = null) => {
     state.status = status;
     state.error = error;
@@ -137,8 +168,20 @@ async function runPipelineLocked({
 
   const isGit = await excludeFactoryDir(dir);
   // Only the factory's own work may end up in its commit, so start from a clean tree.
-  const baseline = isGit ? await snapshot(dir) : new Map();
+  // On resume, files under the run's own artifact dir are its earlier work, not
+  // foreign dirt: they stay out of the baseline so ship still commits them,
+  // while genuinely foreign changes are still refused (or baselined by --allow-dirty).
+  const rawBaseline = isGit ? await snapshot(dir) : new Map();
+  const baseline = saved ? new Map([...rawBaseline].filter(([f]) => !f.startsWith(`${state.artifactDir}/`))) : rawBaseline;
   if (baseline.size > 0 && !allowDirty) {
+    // A refused resume must not destroy the paused run: put it back to
+    // 'paused' untouched so it can be resumed once the tree is clean.
+    if (saved) {
+      state.status = 'paused';
+      state.finishedAt = saved.finishedAt;
+      await save(`Resume refused: working tree has ${baseline.size} foreign uncommitted change(s)`);
+      return state;
+    }
     await save('Working tree has uncommitted changes');
     return finish(
       'failed',
@@ -146,7 +189,11 @@ async function runPipelineLocked({
     );
   }
   await fs.mkdir(artifactDir, { recursive: true });
-  await save(`Run started with ${executor.name} executor: ${title}`);
+  await save(
+    saved
+      ? `Run resumed after ${saved.pausedAfter} with ${executor.name} executor: ${title}`
+      : `Run started with ${executor.name} executor: ${title}`,
+  );
 
   const ctx = {
     dir,
@@ -178,7 +225,8 @@ async function runPipelineLocked({
   }
 
   const feedbackFor = {};
-  let i = 0;
+  let i = saved ? state.stages.findIndex((s) => s.status !== 'passed') : 0;
+  if (i < 0) return finish('passed');
   while (i < stages.length) {
     const stage = stages[i];
     const sState = state.stages[i];
@@ -194,6 +242,7 @@ async function runPipelineLocked({
       sState.status = attempt.ok ? 'passed' : 'failed';
       await save(`Stage ${stage.id} ${sState.status}`);
       if (!attempt.ok) return finish('failed', describeFailures(result.checks).split('\n')[0]);
+      if (pauseAfter === stage.id && i < stages.length - 1) return finishPaused(stage.id);
       i++;
       continue;
     }
@@ -277,6 +326,7 @@ async function runPipelineLocked({
     }
 
     if (passed) {
+      if (pauseAfter === stage.id && i < stages.length - 1) return finishPaused(stage.id);
       i++;
       continue;
     }

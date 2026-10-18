@@ -113,6 +113,7 @@ Loop rules:
 - Every stage has a spend cap (`--max-budget-usd`); `--budget-multiplier` scales them. Cost is tracked per attempt and per run, and `--max-run-usd` (default $15, 0 disables) stops the run once total agent spend reaches it — retries and review rewinds cannot stack per-stage caps into an unbounded bill.
 - Artifacts are committed with the change: `docs/specs/<date>-<slug>/SPEC.md`, `PLAN.md`, `REVIEW.md`. Run state and logs live in `.factory/runs/<id>/` (git-ignored).
 - Nothing merges itself. The PR body carries the acceptance criteria, gate results, review verdict and cost for a human to approve.
+- `--pause-after <stage>` stops the run once that stage's gate passes and saves it as `paused`, so a human can read the spec (or plan) before money is spent building. `factory run --resume <run-id>` continues the same run — same artifacts, history and cost — from the next stage. A resume refused for foreign uncommitted changes leaves the run paused.
 
 `--executor mock` runs the whole flow offline (no API calls), which is how the factory's own CI tests every template end to end.
 
@@ -156,6 +157,8 @@ factory templates
 factory install-claude [dir] [--force]
 factory run (--spec <file> | --request <text>) [--dir] [--stages spec,plan,…] [--executor claude|mock] [--model]
             [--max-attempts 3] [--max-review-loops 2] [--budget-multiplier 1] [--max-run-usd 15] [--ship] [--issue <n>] [--no-commit] [--no-install] [--allow-dirty]
+            [--max-attempts 3] [--max-review-loops 2] [--budget-multiplier 1] [--ship] [--issue <n>] [--no-commit] [--no-install] [--allow-dirty]
+            [--pause-after <stage>] [--resume <run-id>]
 factory ship --run-id <id> [--issue <n>] [--no-push]
 factory runs [--dir]
 factory dashboard [--dir] [--port 4545]

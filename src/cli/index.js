@@ -49,6 +49,8 @@ run options
   --allow-dirty           Start with uncommitted changes (only the run's own changes are committed)
   --issue <n>             Issue number to close from the PR
   --run-id <id>           Use a specific run id (used by the dashboard)
+  --pause-after <stage>   Stop after this stage passes, saving the run as paused (e.g. spec)
+  --resume <run-id>       Resume a paused run from its next stage (no --spec/--request needed)
 `;
 
 function fail(msg) {
@@ -141,11 +143,16 @@ async function cmdRun(argv) {
       'allow-dirty': { type: 'boolean' },
       issue: { type: 'string' },
       'run-id': { type: 'string' },
+      'pause-after': { type: 'string' },
+      resume: { type: 'string' },
     },
   });
   const request = values.spec ? await fs.readFile(values.spec, 'utf8') : values.request;
-  if (!request?.trim()) fail('provide --spec <file> or --request "<text>"');
+  if (!values.resume && !request?.trim()) fail('provide --spec <file> or --request "<text>" (or --resume <run-id>)');
   if (values['run-id'] && !RUN_ID_RE.test(values['run-id'])) fail('invalid --run-id');
+  if (values.resume && !RUN_ID_RE.test(values.resume)) fail('invalid --resume run id');
+  if (values['pause-after'] && !STAGES.some((s) => s.id === values['pause-after']))
+    fail(`--pause-after must be a stage: ${STAGES.map((s) => s.id).join(', ')}`);
   const int = (k, min, max) => {
     const n = Number(values[k]);
     if (!Number.isInteger(n) || n < min || n > max) fail(`--${k} must be an integer from ${min} to ${max}`);
@@ -189,6 +196,8 @@ async function cmdRun(argv) {
       if (!Number.isFinite(cap) || cap < 0 || cap > 100000) fail('--max-run-usd must be a number from 0 (disabled) to 100000');
       return cap === 0 ? null : cap;
     })(),
+    pauseAfter: values['pause-after'] ?? null,
+    resumeRunId: values.resume ?? null,
     maxReviewLoops: int('max-review-loops', 0, 5),
     ship: Boolean(values.ship),
     commit: !values['no-commit'],
@@ -200,7 +209,7 @@ async function cmdRun(argv) {
   });
 
   process.stdout.write(
-    `\n${state.status === 'passed' ? color.green('PASSED') : color.red(state.status.toUpperCase())}  run ${state.id}` +
+    `\n${state.status === 'passed' ? color.green('PASSED') : state.status === 'paused' ? color.yellow('PAUSED') : color.red(state.status.toUpperCase())}  run ${state.id}` +
       `  cost $${state.costUsd.toFixed(2)}${state.branch ? `  branch ${state.branch}` : ''}${state.prUrl ? `\nPR: ${state.prUrl}` : ''}\n` +
       `Artifacts: ${state.artifactDir}/   Logs: .factory/runs/${state.id}/\n`,
   );
@@ -210,7 +219,7 @@ async function cmdRun(argv) {
       `status=${state.status}\nrun_id=${state.id}\npr_url=${state.prUrl ?? ''}\nbranch=${state.branch ?? ''}\n`,
     );
   }
-  process.exit(state.status === 'passed' ? 0 : 1);
+  process.exit(state.status === 'passed' || state.status === 'paused' ? 0 : 1);
 }
 
 async function cmdShip(argv) {
