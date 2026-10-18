@@ -64,7 +64,7 @@ test('every agent run gets the guard hooks via --settings, using absolute paths'
   }
 });
 
-test('claude executor uses the review model only for the review stage', async () => {
+test('claude executor uses the review model only for the review stage', { skip: SKIP_FAKE }, async () => {
   const argvFile = path.join(tmp(), 'argv.txt');
   process.env.FAKE_ARGV_FILE = argvFile;
   const FAKE_ARGV = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'fake-claude-argv.sh');
