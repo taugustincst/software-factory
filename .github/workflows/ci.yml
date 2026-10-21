@@ -49,6 +49,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: test
+    # Ephemeral Postgres for the DB-backed templates (fullstack, node-service);
+    # the other templates ignore DATABASE_URL.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/test
     strategy:
       fail-fast: false
       matrix:

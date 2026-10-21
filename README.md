@@ -37,12 +37,12 @@ factory new visit-export -t node-service --owner taugustincst --description "Vis
 cd visit-export && npm run dev
 ```
 
-| Template         | Stack                                                                                               | Commands gated in CI                                       |
-| ---------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `static-html`    | One self-contained `index.html`, vanilla JS, Vitest + jsdom, html-validate, GitHub Pages deploy     | lint, test                                                 |
-| `fullstack`      | React 19 + Vite, Fastify + Zod API, TypeScript strict, Testing Library, one Docker image            | lint, typecheck, test (coverage ≥ 80%), build              |
-| `node-service`   | Node 24, TypeScript strict, Fastify, Zod config and validation, Vitest, Docker                      | lint, typecheck, test (coverage ≥ 80%), build, `npm audit` |
-| `python-service` | Python 3.13, FastAPI, Pydantic settings, uv, pytest, Ruff (incl. bandit rules), mypy strict, Docker | lint, typecheck, test (coverage ≥ 85%), `pip-audit`        |
+| Template         | Stack                                                                                                                      | Commands gated in CI                                                |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `static-html`    | One self-contained `index.html`, vanilla JS, Vitest + jsdom, html-validate, GitHub Pages deploy                            | lint, test                                                          |
+| `fullstack`      | React 19 + Vite, Fastify + Zod API, Postgres 16 + Drizzle migrations, TypeScript strict, Testing Library, one Docker image | lint, typecheck, migrate, test (coverage ≥ 80%), build              |
+| `node-service`   | Node 24, TypeScript strict, Fastify, Zod config and validation, Postgres 16 + Drizzle migrations, Vitest, Docker           | lint, typecheck, migrate, test (coverage ≥ 80%), build, `npm audit` |
+| `python-service` | Python 3.13, FastAPI, Pydantic settings, uv, pytest, Ruff (incl. bandit rules), mypy strict, Docker                        | lint, typecheck, test (coverage ≥ 85%), `pip-audit`                 |
 
 Every generated project also gets:
 

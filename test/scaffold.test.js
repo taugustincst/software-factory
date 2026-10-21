@@ -66,6 +66,29 @@ for (const template of ['static-html', 'fullstack', 'node-service', 'python-serv
   });
 }
 
+for (const [template, schemaPath] of [
+  ['node-service', 'src/db/schema.ts'],
+  ['fullstack', 'server/db/schema.ts'],
+]) {
+  test(`${template} scaffolds the Postgres + Drizzle stack (P2 phase 1)`, async () => {
+    const dir = path.join(tmp(), 'db-app');
+    const { target } = await scaffold({ template, name: 'db-app', dir, owner: 'octo', install: false, git: true });
+    const cfg = JSON.parse(readFileSync(path.join(target, 'factory.json'), 'utf8'));
+    assert.equal(cfg.commands.migrate, 'npm run db:migrate', `${template} factory.json needs a migrate command`);
+    for (const must of ['docker-compose.yml', 'drizzle.config.ts', schemaPath]) {
+      assert.ok(existsSync(path.join(target, must)), `${template} missing ${must}`);
+    }
+    const migrations = readdirSync(path.join(target, 'drizzle')).filter((f) => f.endsWith('.sql'));
+    assert.equal(migrations.length, 1, `${template} needs exactly one committed initial migration`);
+    assert.match(readFileSync(path.join(target, 'drizzle', migrations[0]), 'utf8'), /CREATE TABLE "tasks"/);
+    const ci = readFileSync(path.join(target, '.github/workflows/ci.yml'), 'utf8');
+    assert.match(ci, /postgres:16/, `${template} CI needs an ephemeral Postgres service`);
+    assert.match(ci, /npm run db:migrate/, `${template} CI must run migrations before tests`);
+    const compose = readFileSync(path.join(target, 'docker-compose.yml'), 'utf8');
+    assert.match(compose, /postgres:16/, `${template} compose must pin Postgres 16`);
+  });
+}
+
 test('test helpers provide a default git identity without overriding the environment', () => {
   // helpers.js (imported above) sets these so git child processes work on
   // machines with no git config; values from the real environment would win.

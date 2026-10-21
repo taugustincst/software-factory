@@ -11,11 +11,19 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['web/src/**', 'server/**'],
-      exclude: ['server/index.ts', 'web/src/main.tsx', '**/*.test.*'],
+      exclude: ['server/index.ts', 'server/db/run-migrations.ts', 'web/src/main.tsx', '**/*.test.*'],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },
     projects: [
-      { extends: true, test: { name: 'web', environment: 'jsdom', include: ['web/**/*.test.tsx'], setupFiles: ['web/src/test-setup.ts'] } },
+      {
+        extends: true,
+        test: {
+          name: 'web',
+          environment: 'jsdom',
+          include: ['web/**/*.test.tsx'],
+          setupFiles: ['web/src/test-setup.ts'],
+        },
+      },
       { extends: true, test: { name: 'server', environment: 'node', include: ['server/**/*.test.ts'] } },
     ],
   },
