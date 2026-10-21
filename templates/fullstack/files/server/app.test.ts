@@ -1,13 +1,39 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from './app.js';
+import { buildApp, type BuildAppOptions } from './app.js';
 import { loadConfig } from './config.js';
+import { createDb, type DbHandle } from './db/index.js';
+import { runMigrations } from './db/migrate.js';
+import { tasks } from './db/schema.js';
+import { PostgresTaskStore } from './tasks.js';
+
+// Tests run against a real, ephemeral Postgres — never an in-memory substitute.
+// CI provides one as a service container (DATABASE_URL); locally use
+// `docker compose up -d db` (default URL in .env.example / config).
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://app:app@127.0.0.1:5432/app';
 
 let app: FastifyInstance | undefined;
-const make = (opts?: { clientDir?: string }) => (app = buildApp(loadConfig({ LOG_LEVEL: 'silent' }), opts));
+let handle: DbHandle;
+
+beforeAll(async () => {
+  handle = createDb(databaseUrl);
+  await runMigrations(handle);
+});
+beforeEach(async () => {
+  await handle.db.delete(tasks);
+});
+afterAll(async () => {
+  await handle.close();
+});
+
+const make = (opts?: BuildAppOptions) =>
+  (app = buildApp(loadConfig({ LOG_LEVEL: 'silent', DATABASE_URL: databaseUrl }), {
+    store: new PostgresTaskStore(handle.db),
+    ...opts,
+  }));
 afterEach(async () => {
   await app?.close();
 });
@@ -21,23 +47,35 @@ describe('api', () => {
 
   it('task lifecycle', async () => {
     const a = make();
-    const created = await a.inject({ method: 'POST', url: '/api/tasks', payload: { title: 'Synthetic task' } });
+    const created = await a.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      payload: { title: 'Synthetic task' },
+    });
     expect(created.statusCode).toBe(201);
     const { id } = created.json<{ data: { id: string } }>().data;
-    expect((await a.inject({ method: 'PATCH', url: `/api/tasks/${id}`, payload: { done: true } })).json()).toMatchObject({
+    expect(
+      (await a.inject({ method: 'PATCH', url: `/api/tasks/${id}`, payload: { done: true } })).json(),
+    ).toMatchObject({
       data: { done: true },
     });
-    expect((await a.inject({ method: 'GET', url: '/api/tasks' })).json<{ data: unknown[] }>().data).toHaveLength(1);
+    expect(
+      (await a.inject({ method: 'GET', url: '/api/tasks' })).json<{ data: unknown[] }>().data,
+    ).toHaveLength(1);
     expect((await a.inject({ method: 'DELETE', url: `/api/tasks/${id}` })).statusCode).toBe(204);
     expect((await a.inject({ method: 'GET', url: `/api/tasks/${id}` })).statusCode).toBe(404);
   });
 
   it('validates input', async () => {
     const a = make();
-    expect((await a.inject({ method: 'POST', url: '/api/tasks', payload: { title: '' } })).statusCode).toBe(400);
+    expect((await a.inject({ method: 'POST', url: '/api/tasks', payload: { title: '' } })).statusCode).toBe(
+      400,
+    );
     expect((await a.inject({ method: 'GET', url: '/api/tasks/nope' })).statusCode).toBe(400);
     const id = crypto.randomUUID();
-    expect((await a.inject({ method: 'PATCH', url: `/api/tasks/${id}`, payload: { done: true } })).statusCode).toBe(404);
+    expect(
+      (await a.inject({ method: 'PATCH', url: `/api/tasks/${id}`, payload: { done: true } })).statusCode,
+    ).toBe(404);
     expect((await a.inject({ method: 'DELETE', url: `/api/tasks/${id}` })).statusCode).toBe(404);
   });
 
@@ -53,7 +91,9 @@ describe('api', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'client-'));
     writeFileSync(path.join(dir, 'index.html'), '<!doctype html><title>app</title>');
     const a = make({ clientDir: dir });
-    expect((await a.inject({ method: 'GET', url: '/some/client/route' })).body).toContain('<title>app</title>');
+    expect((await a.inject({ method: 'GET', url: '/some/client/route' })).body).toContain(
+      '<title>app</title>',
+    );
     expect((await a.inject({ method: 'GET', url: '/api/missing' })).statusCode).toBe(404);
   });
 });

@@ -31,7 +31,9 @@ for (const t of templates) {
     process.stdout.write(`  ${color.red('✗')} install\n`);
     continue;
   }
-  for (const key of ['lint', 'typecheck', 'test', 'build']) {
+  // `migrate` runs when a template defines it (DB templates): the ephemeral
+  // Postgres from CI (DATABASE_URL) must be migrated before the test suite.
+  for (const key of ['lint', 'typecheck', 'migrate', 'test', 'build']) {
     const cmd = t.commands[key];
     if (!cmd) continue;
     const started = Date.now();

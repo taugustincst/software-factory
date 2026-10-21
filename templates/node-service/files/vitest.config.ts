@@ -6,7 +6,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**'],
-      exclude: ['src/server.ts'],
+      exclude: ['src/server.ts', 'src/db/run-migrations.ts'],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },
   },
