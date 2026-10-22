@@ -3,7 +3,7 @@ import html from 'eslint-plugin-html';
 import globals from 'globals';
 
 export default [
-  { ignores: ['node_modules', 'coverage', '_site', '.claude', '.factory'] },
+  { ignores: ['node_modules', 'coverage', '_site', '.claude', '.factory', 'playwright-report', 'test-results'] },
   js.configs.recommended,
   {
     files: ['**/*.html'],

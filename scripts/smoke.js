@@ -33,9 +33,13 @@ for (const t of templates) {
   }
   // `migrate` runs when a template defines it (DB templates): the ephemeral
   // Postgres from CI (DATABASE_URL) must be migrated before the test suite.
-  for (const key of ['lint', 'typecheck', 'migrate', 'test', 'build']) {
+  // `e2e` runs when a template defines it (UI templates): Playwright browsers
+  // are machine-level, not npm dependencies, so install Chromium into the
+  // shared browser cache first (a no-op when the revision is already there).
+  for (const key of ['lint', 'typecheck', 'migrate', 'test', 'build', 'e2e']) {
     const cmd = t.commands[key];
     if (!cmd) continue;
+    if (key === 'e2e') await run('npx playwright install chromium', { cwd: dir });
     const started = Date.now();
     const r = await run(cmd, { cwd: dir });
     const ok = r.code === 0;

@@ -2,7 +2,7 @@
 
 {{factory.description}}. Built from the [software-factory](https://github.com/taugustincst/software-factory) `fullstack` template.
 
-**Stack:** React 19 + Vite (client), Fastify + Zod (API), Postgres 16 with Drizzle ORM and committed migrations, self-hosted session auth (argon2id), TypeScript strict throughout, Vitest projects for web (jsdom + Testing Library) and server, coverage gates, single Docker image serving both.
+**Stack:** React 19 + Vite (client), Fastify + Zod (API), Postgres 16 with Drizzle ORM and committed migrations, self-hosted session auth (argon2id), TypeScript strict throughout, Vitest projects for web (jsdom + Testing Library) and server, Playwright end-to-end tests, coverage gates, single Docker image serving both.
 
 ## Quick start
 
@@ -22,6 +22,7 @@ npm run dev            # web http://localhost:5173  (proxies /api → :3000)
 | Lint + format check | `npm run lint` |
 | Type check | `npm run typecheck` |
 | Tests + coverage | `npm test` |
+| End-to-end tests (Playwright) | `npm run e2e` |
 | Production build | `npm run build && npm start` |
 | Start local Postgres | `npm run db:up` |
 | Apply DB migrations | `npm run db:migrate` |
@@ -41,6 +42,19 @@ docker-compose.yml   local Postgres 16 for development
 dist/client, dist/server   build output; the server serves the client in production
 docs/specs/          specs, plans and reviews per change
 ```
+
+## End-to-end tests
+
+Playwright (`e2e/`, `playwright.config.ts`) drives a real Chromium against the production build — the server serves the built client and the API on http://127.0.0.1:3000, backed by the same migrated Postgres as the unit tests (no mocks). The suite covers the tasks example through the UI and the full auth flow (register → protected panel → sign out → login).
+
+```bash
+npm run db:up          # Postgres 16 (skip when one is already reachable)
+npm run db:migrate
+npx playwright install chromium   # once per machine: downloads the browser
+npm run e2e            # builds the app, starts it, runs the suite
+```
+
+In CI the browser is installed with `npx playwright install --with-deps chromium` and, on failure, the Playwright report and test results (traces/screenshots) are uploaded as the `playwright-artifacts` artifact.
 
 ## Auth
 

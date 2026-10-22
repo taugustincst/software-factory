@@ -4,3 +4,5 @@ _site
 package-lock.json
 .claude
 docs/specs
+playwright-report
+test-results
