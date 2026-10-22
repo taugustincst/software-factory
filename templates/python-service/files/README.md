@@ -25,6 +25,7 @@ uv run uvicorn app.main:app --reload     # http://127.0.0.1:8000/healthz, docs a
 | Apply DB migrations | `uv run db-migrate` |
 | Generate a migration after changing `src/app/db.py` | `uv run alembic revision --autogenerate -m "<change>"` |
 | Container | `docker build -t {{factory.name}} .` |
+| Deploy (opt-in, manual) | Actions → Deploy → Run workflow (see Deploy) |
 
 Tests run against a real Postgres — CI provides an ephemeral one as a service container and runs `uv run db-migrate` before the suite; locally they use `DATABASE_URL` (default: the Compose database).
 
@@ -66,6 +67,36 @@ Vendor backends that accept OTLP (Grafana Cloud, Honeycomb, …) work the same w
 
 Every log line carries `trace_id=` and `span_id=` fields (`-` outside a span), so a line emitted while a request is being traced can be correlated with its trace. Spans only contain routes, methods and status codes — never add headers, request bodies or other sensitive data as span attributes.
 
+## Deploy
+
+Production deploys are **opt-in and manual**. `.github/workflows/deploy.yml` builds the Docker image and pushes it to GHCR (`ghcr.io/<owner>/{{factory.name}}`, tagged with the commit SHA and `latest`), but it has no automatic trigger: it only runs when you start it from Actions → Deploy → Run workflow, and only when the repository variable `DEPLOY_ENABLED` is set to `true` (Settings → Secrets and variables → Actions → Variables). Nothing deploys on push or merge.
+
+`docker-compose.prod.yml` is the production example for a single Lightsail/VPS host: the published app image plus Postgres 16, with the app applying the committed migrations (the `db-migrate` console script) before it starts. The app only listens on `127.0.0.1:8000` — terminate TLS with a reverse proxy on the host.
+
+1. Provision a Lightsail instance (or any VPS) and install Docker with the Compose plugin.
+2. Copy `docker-compose.prod.yml` to the server and create a `.env` beside it — secrets live only in that file, never in git:
+
+   ```bash
+   POSTGRES_PASSWORD=<random, URL-safe>
+   SESSION_SECRET=<at least 32 random characters>
+   # optional overrides: POSTGRES_USER, POSTGRES_DB, SESSION_TTL_HOURS, LOG_LEVEL, CORS_ORIGINS
+   # optional tracing: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME
+   ```
+
+   Keep the Postgres password URL-safe (or URL-encode it): it is interpolated into `DATABASE_URL`.
+
+3. Make the GHCR package public, or run `docker login ghcr.io` on the server with a read-only token.
+4. Ship a release: run the Deploy workflow in GitHub, then on the server:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml pull
+   docker compose -f docker-compose.prod.yml up -d
+   ```
+
+5. Put Caddy (or another reverse proxy) in front for TLS, e.g. `example.com { reverse_proxy 127.0.0.1:8000 }`, and point DNS at the host.
+
+To roll back, point the app image in `docker-compose.prod.yml` at the previous release's `sha-…` tag and `up -d` again.
+
 ## Building features
 
 In Claude Code: `/factory <what you want>`. Or label a GitHub issue `factory` and the pipeline opens a PR.
@@ -82,6 +113,7 @@ src/app/auth.py     session auth: argon2id passwords, session store, guards
 src/app/telemetry.py OpenTelemetry setup: env-gated, off by default
 alembic/            Alembic environment + committed migrations
 docker-compose.yml  local Postgres 16 for development
+docker-compose.prod.yml   production example: GHCR app image + Postgres (see Deploy)
 tests/              pytest with TestClient against a real Postgres
 docs/specs/         specs, plans and reviews per change
 ```
