@@ -270,10 +270,10 @@ for (const template of ['fullstack', 'node-service', 'python-service']) {
     // ...and the publishing job is skipped unless the owner opts in.
     assert.match(deploy, /if: vars\.DEPLOY_ENABLED == 'true'/);
     assert.match(deploy, /packages: write/);
-    assert.match(deploy, /ghcr\.io/);
+    assert.match(deploy, /^ {10}images: ghcr\.io\/\$\{\{ github\.repository \}\}/m);
     assert.match(deploy, /docker\/build-push-action/);
     const prod = readFileSync(path.join(target, 'docker-compose.prod.yml'), 'utf8');
-    assert.match(prod, /ghcr\.io\/octo\/deploy-app:latest/);
+    assert.match(prod, /^ {4}image: ghcr\.io\/octo\/deploy-app:latest$/m);
     assert.match(prod, /postgres:16/);
     assert.match(prod, /SESSION_SECRET/);
     assert.match(prod, /OTEL_EXPORTER_OTLP_ENDPOINT/);
