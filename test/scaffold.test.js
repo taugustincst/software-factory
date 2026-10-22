@@ -259,6 +259,50 @@ test('static-html ships no OpenTelemetry (P2 phase 5 is service-only)', async ()
   assert.doesNotMatch(readFileSync(path.join(target, 'package.json'), 'utf8'), /opentelemetry/i);
 });
 
+for (const template of ['fullstack', 'node-service', 'python-service']) {
+  test(`${template} scaffolds the opt-in GHCR deploy stub (P2 phase 6)`, async () => {
+    const dir = path.join(tmp(), 'deploy-app');
+    const { target } = await scaffold({ template, name: 'deploy-app', dir, owner: 'octo', install: false, git: true });
+    const deploy = readFileSync(path.join(target, '.github/workflows/deploy.yml'), 'utf8');
+    // Disabled by default: the only trigger is a manual dispatch...
+    assert.match(deploy, /on:\n {2}workflow_dispatch:/);
+    assert.doesNotMatch(deploy, /^ {2}(push|release|schedule):/m);
+    // ...and the publishing job is skipped unless the owner opts in.
+    assert.match(deploy, /if: vars\.DEPLOY_ENABLED == 'true'/);
+    assert.match(deploy, /packages: write/);
+    assert.match(deploy, /ghcr\.io/);
+    assert.match(deploy, /docker\/build-push-action/);
+    const prod = readFileSync(path.join(target, 'docker-compose.prod.yml'), 'utf8');
+    assert.match(prod, /ghcr\.io\/octo\/deploy-app:latest/);
+    assert.match(prod, /postgres:16/);
+    assert.match(prod, /SESSION_SECRET/);
+    assert.match(prod, /OTEL_EXPORTER_OTLP_ENDPOINT/);
+    // The prod app applies the committed migrations before it starts.
+    assert.match(prod, /run-migrations\.js|db-migrate/);
+    assert.match(readFileSync(path.join(target, 'README.md'), 'utf8'), /## Deploy/);
+    // The deploy path is Actions-based, not a gate: factory.json gains no
+    // deploy command.
+    const cfg = JSON.parse(readFileSync(path.join(target, 'factory.json'), 'utf8'));
+    assert.equal(cfg.commands.deploy, undefined, `${template} factory.json must not define a deploy command`);
+  });
+}
+
+test('static-html deploys via GitHub Pages and ships no GHCR stub (P2 phase 6)', async () => {
+  const dir = path.join(tmp(), 'pages-app');
+  const { target } = await scaffold({
+    template: 'static-html',
+    name: 'pages-app',
+    dir,
+    owner: 'octo',
+    install: false,
+    git: true,
+  });
+  assert.ok(existsSync(path.join(target, '.github/workflows/pages.yml')), 'static-html must keep its Pages workflow');
+  assert.ok(!existsSync(path.join(target, '.github/workflows/deploy.yml')), 'static-html must not ship the GHCR stub');
+  assert.ok(!existsSync(path.join(target, 'docker-compose.prod.yml')), 'static-html must not ship a prod compose');
+  assert.match(readFileSync(path.join(target, 'README.md'), 'utf8'), /GitHub Pages/);
+});
+
 test('test helpers provide a default git identity without overriding the environment', () => {
   // helpers.js (imported above) sets these so git child processes work on
   // machines with no git config; values from the real environment would win.

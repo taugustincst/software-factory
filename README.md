@@ -37,12 +37,12 @@ factory new visit-export -t node-service --owner taugustincst --description "Vis
 cd visit-export && npm run dev
 ```
 
-| Template         | Stack                                                                                                                                                               | Commands gated in CI                                                |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `static-html`    | One self-contained `index.html`, vanilla JS, Vitest + jsdom, Playwright e2e, html-validate, GitHub Pages deploy                                                     | lint, test, e2e                                                     |
-| `fullstack`      | React 19 + Vite, Fastify + Zod API, Postgres 16 + Drizzle migrations, session auth (argon2id), TypeScript strict, Testing Library, Playwright e2e, one Docker image | lint, typecheck, migrate, test (coverage ≥ 80%), build, e2e         |
-| `node-service`   | Node 24, TypeScript strict, Fastify, Zod config and validation, Postgres 16 + Drizzle migrations, session auth (argon2id), Vitest, Docker                           | lint, typecheck, migrate, test (coverage ≥ 80%), build, `npm audit` |
-| `python-service` | Python 3.13, FastAPI, Pydantic settings, Postgres 16 + SQLAlchemy 2 + Alembic migrations, session auth (argon2id), uv, pytest, Ruff, mypy strict, Docker            | lint, typecheck, migrate, test (coverage ≥ 85%), `pip-audit`        |
+| Template         | Stack                                                                                                                                                                                                                  | Commands gated in CI                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `static-html`    | One self-contained `index.html`, vanilla JS, Vitest + jsdom, Playwright e2e, html-validate, GitHub Pages deploy                                                                                                        | lint, test, e2e                                                     |
+| `fullstack`      | React 19 + Vite, Fastify + Zod API, Postgres 16 + Drizzle migrations, session auth (argon2id), TypeScript strict, Testing Library, Playwright e2e, one Docker image, OpenTelemetry (opt-in), GHCR deploy stub (opt-in) | lint, typecheck, migrate, test (coverage ≥ 80%), build, e2e         |
+| `node-service`   | Node 24, TypeScript strict, Fastify, Zod config and validation, Postgres 16 + Drizzle migrations, session auth (argon2id), Vitest, Docker, OpenTelemetry (opt-in), GHCR deploy stub (opt-in)                           | lint, typecheck, migrate, test (coverage ≥ 80%), build, `npm audit` |
+| `python-service` | Python 3.13, FastAPI, Pydantic settings, Postgres 16 + SQLAlchemy 2 + Alembic migrations, session auth (argon2id), uv, pytest, Ruff, mypy strict, Docker, OpenTelemetry (opt-in), GHCR deploy stub (opt-in)            | lint, typecheck, migrate, test (coverage ≥ 85%), `pip-audit`        |
 
 Every generated project also gets:
 
@@ -51,6 +51,8 @@ Every generated project also gets:
 - **Workflow:** Conventional Commits PR-title check, release-please changelogs and tags, PR template with risk and rollback, issue forms, `CODEOWNERS`, `CONTRIBUTING.md`, MIT license.
 - **The Claude Code kit** (below) and the **factory pipeline workflow** (`.github/workflows/factory.yml`).
 - An example resource (tasks) showing the patterns to copy: schema validation at the edge, strict objects, consistent error bodies, a store interface, tests through the public API.
+- **Observability (service templates):** OpenTelemetry tracing, vendor-neutral — OTLP exporter driven by env vars and off by default; structured logs carry `trace_id`/`span_id` while a request is traced.
+- **Deploy:** `static-html` publishes to GitHub Pages on push. The service templates ship a disabled-by-default Deploy workflow (manual dispatch only, guarded by a `DEPLOY_ENABLED` repository variable) that pushes the Docker image to GHCR, plus a `docker-compose.prod.yml` production example for a single Lightsail/VPS host — migrations on start, secrets in a host-only `.env`, reverse proxy for TLS.
 - A clean first commit. The scaffolder formats rendered files, so `lint` passes on day one.
 
 **One setting to flip in each generated repo:** release-please opens the release PR with the default Actions token, which GitHub blocks until the repo allows it. In the new repo go to Settings → Actions → General → Workflow permissions, select **Read and write permissions** and check **Allow GitHub Actions to create and approve pull requests**. Without it the Release workflow fails with "GitHub Actions is not permitted to create or approve pull requests." The generated `release.yml` carries the same reminder in its header.

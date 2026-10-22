@@ -1,0 +1,54 @@
+# Production example for a single Lightsail/VPS host.
+#
+# Uses the image published to GHCR by the opt-in Deploy workflow
+# (.github/workflows/deploy.yml) plus a Postgres on the same host. Create a
+# `.env` file beside this file on the server (POSTGRES_PASSWORD and
+# SESSION_SECRET at minimum — see "Deploy" in README.md), never commit it,
+# then:
+#
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# The app service applies the committed migrations before it starts, and
+# only listens on 127.0.0.1: put a reverse proxy (e.g. Caddy) on the host
+# in front of it for TLS. GHCR image names are lowercase — lowercase the
+# owner below if your GitHub username contains uppercase letters.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    image: ghcr.io/{{factory.owner}}/{{factory.name}}:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-app}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-168}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # OpenTelemetry stays off unless an OTLP endpoint is set.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-{{factory.name}}}
+    command: ['sh', '-c', 'node dist/db/run-migrations.js && exec node dist/server.js']
+    ports:
+      - '127.0.0.1:3000:3000'
+
+volumes:
+  pgdata:

@@ -1,6 +1,6 @@
 {
   "title": "Node integration service",
-  "stack": "Node 24 · TypeScript · Fastify · Zod · Postgres 16 · Drizzle · session auth (argon2id) · OpenTelemetry (opt-in) · Vitest · Docker",
+  "stack": "Node 24 · TypeScript · Fastify · Zod · Postgres 16 · Drizzle · session auth (argon2id) · OpenTelemetry (opt-in) · Vitest · Docker · GHCR deploy stub (opt-in)",
   "defaultDescription": "HTTP integration service",
   "vars": {
     "codeqlLanguage": "javascript-typescript",
