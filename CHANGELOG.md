@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.0](https://github.com/taugustincst/software-factory/compare/v0.2.0...v0.3.0) (2026-10-22)
+
+
+### Features
+
+* OpenTelemetry tracing for the service templates (P2 phase 5) ([d6bc754](https://github.com/taugustincst/software-factory/commit/d6bc754c9bb268e685779c4874de65562b7b1d43))
+* OpenTelemetry tracing for the service templates (P2 phase 5) ([bf48fd2](https://github.com/taugustincst/software-factory/commit/bf48fd2220db4072a7acc9dad95bbfd7dbb258bc))
+* opt-in GHCR deploy stubs, prod compose and P2 docs (P2 phase 6) ([244ba4e](https://github.com/taugustincst/software-factory/commit/244ba4e5836e1a2a468bd66224f65619702699c5))
+* opt-in GHCR deploy stubs, prod compose and P2 docs (P2 phase 6) ([994b2f9](https://github.com/taugustincst/software-factory/commit/994b2f9caf24d00ec87cc7359718f54f61131c93))
+* Playwright e2e for the UI templates (P2 phase 4) ([cfbd57d](https://github.com/taugustincst/software-factory/commit/cfbd57d64256b5b04debdb33c87d41a8a5a97963))
+* Playwright e2e for the UI templates (P2 phase 4) ([9a1003c](https://github.com/taugustincst/software-factory/commit/9a1003c9c0eb06c43964936f8fc1c3b163c7bf98))
+* Postgres + Drizzle DB foundation for TS templates (P2 phase 1) ([39f753b](https://github.com/taugustincst/software-factory/commit/39f753b6c1acf9dae1b3ccde8fb0449556ddd855))
+* Postgres + Drizzle DB foundation for TS templates (P2 phase 1) ([f075b6d](https://github.com/taugustincst/software-factory/commit/f075b6dbc7c3285512ba51bfd1ed47c7afcb3158))
+* Postgres + SQLAlchemy/Alembic DB foundation for python-service (P2 phase 2) ([59559bf](https://github.com/taugustincst/software-factory/commit/59559bfb055adada7b56b2d560d3999057ee5676))
+* Postgres + SQLAlchemy/Alembic DB foundation for python-service (P2 phase 2) ([70890c3](https://github.com/taugustincst/software-factory/commit/70890c3cf2012b1bc74d11ace6ad094fbdb99e88))
+* rate-limit credential endpoints in service templates (CodeQL) ([304550c](https://github.com/taugustincst/software-factory/commit/304550c295395e618b9b6438f939d6d22d328013))
+* session auth (argon2id) for service templates (P2 phase 3) ([c1cab89](https://github.com/taugustincst/software-factory/commit/c1cab89910543a6d25b520cab4fd84fb2b0c707d))
+* session auth (argon2id) for service templates (P2 phase 3) ([576e1b9](https://github.com/taugustincst/software-factory/commit/576e1b97dfd92f21b81937308df24c9d9f274be0))
+
+
+### Bug Fixes
+
+* send a JSON content type only when the fullstack web client sends a body ([4274ede](https://github.com/taugustincst/software-factory/commit/4274eded98506298ee8babe8eceacaa2e8f8df08))
+* template lint stays green after an e2e run (P2 phase 4) ([03dabca](https://github.com/taugustincst/software-factory/commit/03dabcad2f45eef9fc4562683aa91d3b2599617d))
+
 ## [0.2.0](https://github.com/taugustincst/software-factory/compare/v0.1.0...v0.2.0) (2026-10-18)
 
 
