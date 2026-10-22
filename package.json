@@ -1,6 +1,6 @@
 {
   "name": "software-factory",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Automated software factory: project templates with CI/CD and security, a Claude Code kit of agents, commands, skills and guard hooks, and a gated spec → plan → build → test → review → ship agent pipeline.",
   "type": "module",
   "bin": {
