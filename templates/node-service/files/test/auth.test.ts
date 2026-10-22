@@ -108,6 +108,13 @@ describe('auth', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('rate limits repeated login attempts', async () => {
+    for (let i = 0; i < 10; i++) {
+      expect((await login({ email: 'ghost@example.org', password: 'long-enough-1' })).statusCode).toBe(401);
+    }
+    expect((await login({ email: 'ghost@example.org', password: 'long-enough-1' })).statusCode).toBe(429);
+  });
+
   it('enforces the admin role on /v1/admin', async () => {
     const res = await register({ email: 'user@example.org', password: 'long-enough-1' });
     const userCookie = sessionCookie(res.headers['set-cookie']);

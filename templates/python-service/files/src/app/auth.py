@@ -9,6 +9,8 @@ handlers and keep the session layer.
 import hashlib
 import hmac
 import secrets
+import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Protocol
@@ -137,6 +139,38 @@ class PostgresAuthStore:
             session.commit()
 
 
+class RateLimiter:
+    """In-memory sliding-window limiter for the credential endpoints.
+
+    Per-process by design (a template default): behind multiple replicas,
+    swap this for a shared store such as Redis without changing the routes.
+    """
+
+    def __init__(self, max_attempts: int = 10, window_seconds: int = 900) -> None:
+        self._max_attempts = max_attempts
+        self._window_seconds = window_seconds
+        self._hits: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def check(self, key: str) -> None:
+        now = time.monotonic()
+        cutoff = now - self._window_seconds
+        with self._lock:
+            hits = [t for t in self._hits.get(key, []) if t > cutoff]
+            if len(hits) >= self._max_attempts:
+                raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="too_many_requests")
+            hits.append(now)
+            self._hits[key] = hits
+
+
+def get_rate_limiter(request: Request) -> RateLimiter:
+    limiter: RateLimiter = request.app.state.auth_rate_limiter
+    return limiter
+
+
+RateLimit = Annotated[RateLimiter, Depends(get_rate_limiter)]
+
+
 def get_store(request: Request) -> AuthStore:
     store: AuthStore = request.app.state.auth_store
     return store
@@ -191,9 +225,15 @@ def require_role(role: str) -> Callable[[PublicUser], PublicUser]:
 
 
 @router.post("/v1/auth/register", status_code=status.HTTP_201_CREATED)
-def register(
-    body: Credentials, store: Store, settings: AppSettings, response: Response
+def register(  # noqa: PLR0913, PLR0917 — FastAPI dependency parameters, not call arguments
+    body: Credentials,
+    store: Store,
+    settings: AppSettings,
+    response: Response,
+    request: Request,
+    limiter: RateLimit,
 ) -> dict[str, PublicUser]:
+    limiter.check(request.client.host if request.client else "unknown")
     if store.get_user_by_email(body.email) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="email_taken")
     user = store.create_user(body.email, hash_password(body.password))
@@ -202,9 +242,15 @@ def register(
 
 
 @router.post("/v1/auth/login")
-def login(
-    body: Credentials, store: Store, settings: AppSettings, response: Response
+def login(  # noqa: PLR0913, PLR0917 — FastAPI dependency parameters, not call arguments
+    body: Credentials,
+    store: Store,
+    settings: AppSettings,
+    response: Response,
+    request: Request,
+    limiter: RateLimit,
 ) -> dict[str, PublicUser]:
+    limiter.check(request.client.host if request.client else "unknown")
     user = store.get_user_by_email(body.email)
     # Verify against a real hash even for unknown emails, so timing does not reveal which emails exist.
     ok = verify_password(user.password_hash if user is not None else _DUMMY_HASH, body.password)
@@ -248,6 +294,7 @@ __all__ = [
     "CurrentUser",
     "PostgresAuthStore",
     "PublicUser",
+    "RateLimiter",
     "get_current_user",
     "hash_password",
     "hash_session_token",

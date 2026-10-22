@@ -45,7 +45,7 @@ The task resource is an example of the patterns to follow: Pydantic schemas at t
 
 ## Auth
 
-Self-hosted session auth in `src/app/auth.py`: argon2id password hashes (argon2-cffi), random session tokens — the cookie carries the raw token, the database stores only an HMAC of it keyed by `SESSION_SECRET`. Protect a route with the `get_current_user` dependency (`CurrentUser`), and use `Depends(require_role("admin"))` for role checks (see `/v1/me` and `/v1/admin`). Registration always creates role `user`; promote in the database to make an admin. Set a real `SESSION_SECRET` in production — the app refuses to start in production with the dev default.
+Self-hosted session auth in `src/app/auth.py`: rate-limited credential endpoints (in-memory limiter, 10 attempts / 15 min / IP), argon2id password hashes (argon2-cffi), random session tokens — the cookie carries the raw token, the database stores only an HMAC of it keyed by `SESSION_SECRET`. Protect a route with the `get_current_user` dependency (`CurrentUser`), and use `Depends(require_role("admin"))` for role checks (see `/v1/me` and `/v1/admin`). Registration always creates role `user`; promote in the database to make an admin. Set a real `SESSION_SECRET` in production — the app refuses to start in production with the dev default.
 
 ## Building features
 

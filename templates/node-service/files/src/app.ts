@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import { ZodError } from 'zod';
 import { PostgresAuthStore, type AuthStore } from './auth.js';
 import type { Config } from './config.js';
@@ -28,6 +29,9 @@ export function buildApp(config: Config, options: BuildAppOptions = {}): Fastify
   });
 
   void app.register(helmet);
+  // Not global: only the auth routes opt in (see routes/auth.ts), so normal
+  // API traffic is never throttled by default.
+  void app.register(rateLimit, { global: false });
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof ZodError) {

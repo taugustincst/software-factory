@@ -82,6 +82,14 @@ def test_expired_session_is_rejected(client: TestClient) -> None:
     assert res.status_code == 401
 
 
+def test_login_is_rate_limited(client: TestClient) -> None:
+    for _ in range(10):
+        res = client.post("/v1/auth/login", json={"email": "ghost@example.org", "password": PASSWORD})
+        assert res.status_code == 401
+    blocked = client.post("/v1/auth/login", json={"email": "ghost@example.org", "password": PASSWORD})
+    assert blocked.status_code == 429
+
+
 def test_admin_route_enforces_role(client: TestClient) -> None:
     assert _register(client, "user@example.org").status_code == 201
     assert client.get("/v1/admin").status_code == 403

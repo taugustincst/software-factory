@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.auth import PostgresAuthStore
+from app.auth import PostgresAuthStore, RateLimiter
 from app.auth import router as auth_router
 from app.config import Settings, get_settings
 from app.db import make_engine
@@ -38,6 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.task_store = PostgresTaskStore(engine)
     app.state.auth_store = PostgresAuthStore(engine)
+    app.state.auth_rate_limiter = RateLimiter()
 
     if settings.cors_origins:
         app.add_middleware(

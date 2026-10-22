@@ -44,7 +44,7 @@ docs/specs/          specs, plans and reviews per change
 
 ## Auth
 
-Self-hosted session auth: `server/auth.ts` + `server/routes/auth.ts` (argon2id password hashes via @node-rs/argon2; the cookie carries a random token, the database stores only an HMAC of it keyed by `SESSION_SECRET`). `POST /api/auth/register|login|logout`, protected example `GET /api/me`, RBAC example `GET /api/admin` (`requireRole('admin')` chained after `requireAuth`). The React app ships a login/register form and renders a protected account panel only when `/api/me` accepts the session. Registration always creates role `user`; promote in the database to make an admin. Set a real `SESSION_SECRET` in production — the server refuses to start in production with the dev default.
+Self-hosted session auth: `server/auth.ts` + `server/routes/auth.ts` (rate-limited credential endpoints, 10 attempts / 15 min / IP; argon2id password hashes via @node-rs/argon2; the cookie carries a random token, the database stores only an HMAC of it keyed by `SESSION_SECRET`). `POST /api/auth/register|login|logout`, protected example `GET /api/me`, RBAC example `GET /api/admin` (`requireRole('admin')` chained after `requireAuth`). The React app ships a login/register form and renders a protected account panel only when `/api/me` accepts the session. Registration always creates role `user`; promote in the database to make an admin. Set a real `SESSION_SECRET` in production — the server refuses to start in production with the dev default.
 
 ## Building features
 

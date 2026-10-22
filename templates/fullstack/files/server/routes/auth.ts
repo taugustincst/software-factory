@@ -71,8 +71,10 @@ async function setSessionCookie(reply: FastifyReply, userId: string, opts: AuthP
 
 export const authRoutes: FastifyPluginAsync<AuthPluginOptions> = async (app, opts) => {
   const auth = requireAuth(opts);
+  // Brute-force protection on the credential endpoints (CodeQL: missing rate limiting).
+  const credentialRateLimit = { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } };
 
-  app.post('/auth/register', async (req, reply) => {
+  app.post('/auth/register', credentialRateLimit, async (req, reply) => {
     const { email, password } = credentialsSchema.parse(req.body);
     if (await opts.store.getUserByEmail(email)) {
       return reply.status(409).send({ error: 'email_taken' });
@@ -82,7 +84,7 @@ export const authRoutes: FastifyPluginAsync<AuthPluginOptions> = async (app, opt
     return reply.status(201).send({ data: { id: user.id, email: user.email, role: user.role } });
   });
 
-  app.post('/auth/login', async (req, reply) => {
+  app.post('/auth/login', credentialRateLimit, async (req, reply) => {
     const { email, password } = credentialsSchema.parse(req.body);
     const user = await opts.store.getUserByEmail(email);
     const ok = user ? await verifyPassword(user.passwordHash, password) : await verifyDummyPassword(password);

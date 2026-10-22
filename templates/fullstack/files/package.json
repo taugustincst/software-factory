@@ -4,7 +4,9 @@
   "description": "{{factory.description}}",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,magenta \"tsx watch --env-file-if-exists=.env server/index.ts\" \"vite\"",
     "build": "vite build && tsc -p tsconfig.server.json",
@@ -20,6 +22,7 @@
   "dependencies": {
     "@fastify/helmet": "^13.2.0",
     "@fastify/static": "^10.1.6",
+    "@fastify/rate-limit": "^11.2.1",
     "@node-rs/argon2": "^2.0.2",
     "drizzle-orm": "^0.45.4",
     "fastify": "^5.12.7",
