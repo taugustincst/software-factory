@@ -44,6 +44,18 @@ jobs:
       - run: npm run db:migrate
       - run: npm test
       - run: npm run build
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
       - run: npm audit --omit=dev --audit-level=high
 
   docker:

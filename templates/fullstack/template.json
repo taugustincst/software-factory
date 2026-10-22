@@ -1,6 +1,6 @@
 {
   "title": "Full-stack web app",
-  "stack": "React 19 · Vite · TypeScript · Fastify API · Postgres 16 · Drizzle · session auth (argon2id) · Vitest + Testing Library · Docker",
+  "stack": "React 19 · Vite · TypeScript · Fastify API · Postgres 16 · Drizzle · session auth (argon2id) · Vitest + Testing Library · Playwright e2e · Docker",
   "defaultDescription": "Full-stack web application",
   "vars": {
     "codeqlLanguage": "javascript-typescript",
@@ -14,6 +14,7 @@
     "test": "npm test",
     "coverage": "npx vitest run --coverage",
     "build": "npm run build",
+    "e2e": "npm run e2e",
     "migrate": "npm run db:migrate",
     "dev": "npm run dev"
   },

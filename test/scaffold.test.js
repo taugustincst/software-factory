@@ -142,6 +142,53 @@ test('python-service scaffolds the Postgres + SQLAlchemy/Alembic stack (P2 phase
   }
 });
 
+for (const [template, configFile, specs] of [
+  ['fullstack', 'playwright.config.ts', ['e2e/smoke.spec.ts', 'e2e/auth.spec.ts']],
+  ['static-html', 'playwright.config.js', ['e2e/smoke.spec.js']],
+]) {
+  test(`${template} scaffolds Playwright e2e (P2 phase 4)`, async () => {
+    const dir = path.join(tmp(), 'e2e-app');
+    const { target } = await scaffold({ template, name: 'e2e-app', dir, owner: 'octo', install: false, git: true });
+    const cfg = JSON.parse(readFileSync(path.join(target, 'factory.json'), 'utf8'));
+    assert.equal(cfg.commands.e2e, 'npm run e2e', `${template} factory.json needs an e2e command`);
+    assert.ok(existsSync(path.join(target, configFile)), `${template} missing ${configFile}`);
+    for (const spec of specs) {
+      assert.ok(existsSync(path.join(target, spec)), `${template} missing ${spec}`);
+    }
+    const pkg = JSON.parse(readFileSync(path.join(target, 'package.json'), 'utf8'));
+    assert.ok(pkg.devDependencies['@playwright/test'], `${template} must depend on @playwright/test`);
+    assert.equal(pkg.scripts.e2e, template === 'fullstack' ? 'npm run build && playwright test' : 'playwright test');
+    const ci = readFileSync(path.join(target, '.github/workflows/ci.yml'), 'utf8');
+    assert.match(ci, /playwright install --with-deps chromium/, `${template} CI must install the Playwright browser`);
+    assert.match(ci, /npm run e2e/, `${template} CI must run the e2e suite`);
+    assert.ok(
+      ci.indexOf('playwright install') < ci.indexOf('npm run e2e'),
+      `${template} CI must install the browser before running e2e`,
+    );
+    assert.match(ci, /upload-artifact/, `${template} CI must upload Playwright artifacts on failure`);
+    assert.match(readFileSync(path.join(target, '.gitignore'), 'utf8'), /playwright-report\//);
+    if (template === 'static-html') {
+      // Vitest's default globs would collect the Playwright specs — including
+      // the copies in the .factory upgrade base snapshot — and fail on them.
+      const vitest = readFileSync(path.join(target, 'vitest.config.js'), 'utf8');
+      assert.match(vitest, /'e2e\/\*\*'/, 'static-html vitest config must exclude e2e/');
+      assert.match(vitest, /'\.factory\/\*\*'/, 'static-html vitest config must exclude .factory/');
+    }
+  });
+}
+
+test('service templates ship no Playwright (P2 phase 4 is UI-only)', async () => {
+  for (const template of ['node-service', 'python-service']) {
+    const dir = path.join(tmp(), 'no-e2e-app');
+    const { target } = await scaffold({ template, name: 'no-e2e-app', dir, owner: 'octo', install: false, git: true });
+    const cfg = JSON.parse(readFileSync(path.join(target, 'factory.json'), 'utf8'));
+    assert.equal(cfg.commands.e2e, undefined, `${template} must not define an e2e command`);
+    assert.ok(!existsSync(path.join(target, 'e2e')), `${template} must not scaffold an e2e/ directory`);
+    const manifest = template === 'python-service' ? 'pyproject.toml' : 'package.json';
+    assert.doesNotMatch(readFileSync(path.join(target, manifest), 'utf8'), /playwright/i);
+  }
+});
+
 test('test helpers provide a default git identity without overriding the environment', () => {
   // helpers.js (imported above) sets these so git child processes work on
   // machines with no git config; values from the real environment would win.

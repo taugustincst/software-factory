@@ -15,6 +15,7 @@
     "format": "prettier --write . && eslint --fix .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
+    "e2e": "npm run build && playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx server/db/run-migrations.ts",
     "db:up": "docker compose up -d db"
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

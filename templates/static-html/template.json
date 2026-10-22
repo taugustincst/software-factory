@@ -1,6 +1,6 @@
 {
   "title": "Single-file HTML app",
-  "stack": "One self-contained index.html · vanilla JS · Vitest + jsdom · html-validate · GitHub Pages",
+  "stack": "One self-contained index.html · vanilla JS · Vitest + jsdom · Playwright e2e · html-validate · GitHub Pages",
   "defaultDescription": "Single-file web app",
   "vars": {
     "codeqlLanguage": "javascript-typescript",
@@ -12,6 +12,7 @@
     "lint": "npm run lint",
     "test": "npm test",
     "coverage": "npx vitest run --coverage",
+    "e2e": "npm run e2e",
     "dev": "npm run dev"
   },
   "postCreate": ["npm run format"]
