@@ -10,7 +10,7 @@ const BINARY_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.
 const RENAMES = { _gitignore: '.gitignore', _dockerignore: '.dockerignore', _npmrc: '.npmrc' };
 
 /** Pinned to an immutable commit so generated repos run a known factory version in CI. Bump on release. */
-export const FACTORY_PACKAGE = 'github:taugustincst/software-factory#b214252603d86ad139d0fdb59a34483ae507bc1c';
+export const FACTORY_PACKAGE = 'github:taugustincst/software-factory#d1e7b830c3c176bd7789206f4cbace4d1d73d025';
 
 export const DESCRIPTION_RE = /^[^"\\<>`$\n\r{}]{1,200}$/;
 export const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:\/[A-Za-z0-9_.-]{1,100})?$/;
