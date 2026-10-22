@@ -13,7 +13,9 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  headers.set('Content-Type', 'application/json');
+  // Only claim a JSON body when there is one: Fastify rejects a POST that
+  // declares application/json but sends an empty body (e.g. logout) with 400.
+  if (init?.body) headers.set('Content-Type', 'application/json');
   const res = await fetch(`/api${path}`, { ...init, headers });
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as { error?: string };

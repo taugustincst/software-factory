@@ -82,6 +82,34 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
   });
 
+  it('signs out with a body-less POST (no JSON content type)', async () => {
+    // Regression (found by the Playwright suite): the API client used to send
+    // Content-Type: application/json on every request, and Fastify answers a
+    // body-less JSON POST with 400 — sign-out silently failed in a real
+    // browser while inject-based server tests stayed green.
+    const fetchSpy = mockFetch((url, init) => {
+      if (url.endsWith('/api/me'))
+        return { body: { data: { id: crypto.randomUUID(), email: 'clinician@example.org', role: 'user' } } };
+      if (url.endsWith('/api/auth/logout')) return { status: 204 };
+      return { body: { data: [] } };
+    });
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await waitFor(() => {
+      expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument();
+    });
+    const logoutCall = fetchSpy.mock.calls.find(([input]) =>
+      (typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).endsWith(
+        '/api/auth/logout',
+      ),
+    );
+    expect(logoutCall).toBeDefined();
+    const init = logoutCall?.[1];
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBeUndefined();
+    expect(new Headers(init?.headers).get('Content-Type')).toBeNull();
+  });
+
   it('shows an error when loading fails', async () => {
     mockFetch(() => ({ status: 500, body: { error: 'internal_error' } }));
     render(<App />);
