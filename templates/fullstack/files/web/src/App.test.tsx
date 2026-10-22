@@ -14,7 +14,10 @@ const task = (over: Partial<Task> = {}): Task => ({
 
 function mockFetch(handler: (url: string, init?: RequestInit) => { status?: number; body?: unknown }) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
-    const { status = 200, body } = handler(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, init);
+    const { status = 200, body } = handler(
+      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
+      init,
+    );
     return Promise.resolve(new Response(status === 204 ? null : JSON.stringify(body), { status }));
   });
 }
@@ -64,6 +67,21 @@ describe('App', () => {
     });
   });
 
+  it('signs in through the auth form and shows the protected panel', async () => {
+    mockFetch((url, init) => {
+      if (url.endsWith('/api/me')) return { status: 401, body: { error: 'unauthorized' } };
+      if (url.endsWith('/api/auth/login') && init?.method === 'POST')
+        return { body: { data: { id: crypto.randomUUID(), email: 'clinician@example.org', role: 'user' } } };
+      return { body: { data: [] } };
+    });
+    render(<App />);
+    await userEvent.type(await screen.findByLabelText('Email'), 'clinician@example.org');
+    await userEvent.type(screen.getByLabelText('Password'), 'correct horse battery');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText(/Signed in as clinician@example\.org/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  });
+
   it('shows an error when loading fails', async () => {
     mockFetch(() => ({ status: 500, body: { error: 'internal_error' } }));
     render(<App />);
@@ -71,7 +89,9 @@ describe('App', () => {
   });
 
   it('shows an error when adding fails', async () => {
-    mockFetch((url, init) => (init?.method === 'POST' ? { status: 400, body: { error: 'bad' } } : { body: { data: [] } }));
+    mockFetch((url, init) =>
+      init?.method === 'POST' ? { status: 400, body: { error: 'bad' } } : { body: { data: [] } },
+    );
     render(<App />);
     await userEvent.type(await screen.findByLabelText('New task'), 'x');
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));

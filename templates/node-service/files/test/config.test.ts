@@ -13,4 +13,12 @@ describe('loadConfig', () => {
   it('rejects invalid values with a readable message', () => {
     expect(() => loadConfig({ PORT: '99999' })).toThrow(/Invalid configuration: PORT/);
   });
+
+  it('refuses the dev session secret in production', () => {
+    expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(/SESSION_SECRET/);
+    expect(
+      loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'a-real-production-secret-with-entropy' })
+        .NODE_ENV,
+    ).toBe('production');
+  });
 });

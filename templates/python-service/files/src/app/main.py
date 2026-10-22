@@ -7,6 +7,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.auth import PostgresAuthStore
+from app.auth import router as auth_router
 from app.config import Settings, get_settings
 from app.db import make_engine
 from app.tasks import PostgresTaskStore
@@ -27,13 +29,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     app = FastAPI(
-        title="{{factory.title}}",
+        title="P3 Py",
         docs_url=None if settings.app_env == "production" else "/docs",
         redoc_url=None,
     )
     engine = make_engine(settings.database_url)
     app.state.db_engine = engine
+    app.state.settings = settings
     app.state.task_store = PostgresTaskStore(engine)
+    app.state.auth_store = PostgresAuthStore(engine)
 
     if settings.cors_origins:
         app.add_middleware(
@@ -44,7 +48,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.middleware("http")
-    async def security_headers(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def security_headers(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         response = await call_next(request)
         if not request.url.path.startswith("/docs") and request.url.path != "/openapi.json":
             response.headers.update(SECURITY_HEADERS)
@@ -65,6 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ready"}
 
     app.include_router(tasks_router)
+    app.include_router(auth_router)
     return app
 
 

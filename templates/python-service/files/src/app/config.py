@@ -3,8 +3,11 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Dev-only default for SESSION_SECRET. Production refuses to start with it (see below).
+DEV_SESSION_SECRET = "dev-only-session-secret-change-me"  # noqa: S105 — public dev default; production refuses it (see Settings)
 
 
 class Settings(BaseSettings):
@@ -13,6 +16,9 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     cors_origins: list[str] = Field(default_factory=list)
+    # Keys the HMAC of stored session tokens. Set a real random secret (>= 32 chars) in production.
+    session_secret: str = Field(default=DEV_SESSION_SECRET, min_length=16)
+    session_ttl_hours: int = Field(default=24 * 7, gt=0, le=24 * 90)
     # Local default matches docker-compose.yml; CI and production set DATABASE_URL explicitly.
     database_url: str = "postgresql+psycopg://app:app@localhost:5432/app"
 
@@ -25,6 +31,13 @@ class Settings(BaseSettings):
             if value.startswith(prefix):
                 return "postgresql+psycopg://" + value[len(prefix) :]
         return value
+
+    @model_validator(mode="after")
+    def _refuse_dev_secret_in_production(self) -> "Settings":
+        if self.app_env == "production" and self.session_secret == DEV_SESSION_SECRET:
+            msg = "SESSION_SECRET must be set to a real secret in production (the dev default is public)"
+            raise ValueError(msg)
+        return self
 
 
 @lru_cache
