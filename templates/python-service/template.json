@@ -1,6 +1,6 @@
 {
   "title": "Python integration service",
-  "stack": "Python 3.13 · FastAPI · Pydantic · uv · pytest · Ruff · mypy · Docker",
+  "stack": "Python 3.13 · FastAPI · Pydantic · Postgres 16 · SQLAlchemy 2 · Alembic · uv · pytest · Ruff · mypy · Docker",
   "defaultDescription": "HTTP integration service",
   "vars": {
     "codeqlLanguage": "python",
@@ -11,6 +11,7 @@
     "install": "uv sync",
     "lint": "uv run ruff check . && uv run ruff format --check .",
     "typecheck": "uv run mypy",
+    "migrate": "uv run db-migrate",
     "test": "uv run pytest",
     "coverage": "uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=85",
     "dev": "uv run uvicorn app.main:app --reload"
