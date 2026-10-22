@@ -87,7 +87,7 @@ describe('App', () => {
     // Content-Type: application/json on every request, and Fastify answers a
     // body-less JSON POST with 400 — sign-out silently failed in a real
     // browser while inject-based server tests stayed green.
-    const fetchSpy = mockFetch((url, init) => {
+    const fetchSpy = mockFetch((url) => {
       if (url.endsWith('/api/me'))
         return { body: { data: { id: crypto.randomUUID(), email: 'clinician@example.org', role: 'user' } } };
       if (url.endsWith('/api/auth/logout')) return { status: 204 };

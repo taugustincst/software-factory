@@ -167,6 +167,10 @@ for (const [template, configFile, specs] of [
     );
     assert.match(ci, /upload-artifact/, `${template} CI must upload Playwright artifacts on failure`);
     assert.match(readFileSync(path.join(target, '.gitignore'), 'utf8'), /playwright-report\//);
+    // Generated Playwright output is not source: formatters/linters that run
+    // after an e2e run (the pipeline re-runs the gates) must ignore it.
+    assert.match(readFileSync(path.join(target, '.prettierignore'), 'utf8'), /^playwright-report$/m);
+    assert.match(readFileSync(path.join(target, '.prettierignore'), 'utf8'), /^test-results$/m);
     if (template === 'static-html') {
       // Vitest's default globs would collect the Playwright specs — including
       // the copies in the .factory upgrade base snapshot — and fail on them.
