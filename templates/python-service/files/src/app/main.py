@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,10 @@ from app.config import Settings, get_settings
 from app.db import make_engine
 from app.tasks import PostgresTaskStore
 from app.tasks import router as tasks_router
+from app.telemetry import TraceContextLogFilter, configure_telemetry
+
+if TYPE_CHECKING:
+    from opentelemetry.sdk.trace.export import SpanExporter
 
 logger = logging.getLogger("app")
 
@@ -24,9 +29,18 @@ SECURITY_HEADERS = {
 }
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, *, span_exporter: "SpanExporter | None" = None) -> FastAPI:
     settings = settings or get_settings()
-    logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.basicConfig(
+        level=settings.log_level,
+        format="%(asctime)s %(levelname)s %(name)s trace_id=%(trace_id)s span_id=%(span_id)s %(message)s",
+    )
+    # Every log record carries trace_id/span_id ("-" outside a span), so a
+    # line emitted during a traced request can be correlated with its trace.
+    log_filter = TraceContextLogFilter()
+    for handler in logging.getLogger().handlers:
+        if not any(isinstance(f, TraceContextLogFilter) for f in handler.filters):
+            handler.addFilter(log_filter)
 
     app = FastAPI(
         title="P3 Py",
@@ -73,6 +87,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(tasks_router)
     app.include_router(auth_router)
+    # Off by default: a no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set (or a
+    # test injected an exporter). See app/telemetry.py.
+    configure_telemetry(app, settings, exporter=span_exporter)
     return app
 
 

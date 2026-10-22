@@ -11,6 +11,7 @@ import { createDb, type DbHandle } from './db/index.js';
 import { authRoutes } from './routes/auth.js';
 import { taskRoutes } from './routes/tasks.js';
 import { PostgresTaskStore, type TaskStore } from './tasks.js';
+import { traceLogFields } from './tracing.js';
 
 export interface BuildAppOptions {
   clientDir?: string;
@@ -28,6 +29,8 @@ export function buildApp(
     logger: {
       level: config.LOG_LEVEL,
       redact: ['req.headers.authorization', 'req.headers.cookie', 'req.body'],
+      // Correlate each log line with the active trace, when tracing is on.
+      mixin: () => traceLogFields(),
     },
     bodyLimit: 1_048_576,
     genReqId: () => crypto.randomUUID(),

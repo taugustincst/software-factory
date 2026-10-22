@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     session_ttl_hours: int = Field(default=24 * 7, gt=0, le=24 * 90)
     # Local default matches docker-compose.yml; CI and production set DATABASE_URL explicitly.
     database_url: str = "postgresql+psycopg://app:app@localhost:5432/app"
+    # OpenTelemetry tracing is OFF unless an OTLP endpoint is set (see app/telemetry.py).
+    # Env names follow the OTel spec: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME,
+    # OTEL_SDK_DISABLED — pydantic maps the field names below onto them.
+    otel_exporter_otlp_endpoint: str | None = None
+    otel_service_name: str = "python-service"
+    otel_sdk_disabled: bool = False
 
     @field_validator("database_url", mode="after")
     @classmethod
