@@ -6,6 +6,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --locked --no-dev --no-install-project
 COPY src ./src
+COPY alembic.ini ./
+COPY alembic ./alembic
 RUN uv sync --locked --no-dev
 
 FROM python:3.13-slim

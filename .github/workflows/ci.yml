@@ -49,8 +49,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: test
-    # Ephemeral Postgres for the DB-backed templates (fullstack, node-service);
-    # the other templates ignore DATABASE_URL.
+    # Ephemeral Postgres for the DB-backed templates (fullstack, node-service,
+    # python-service); the other templates ignore DATABASE_URL. The URL uses
+    # the plain postgres:// scheme: the TS driver accepts it and the Python
+    # template's settings rewrite it to postgresql+psycopg://.
     services:
       postgres:
         image: postgres:16-alpine

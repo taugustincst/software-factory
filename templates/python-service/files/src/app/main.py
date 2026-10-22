@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import Settings, get_settings
-from app.tasks import TaskStore
+from app.db import make_engine
+from app.tasks import PostgresTaskStore
 from app.tasks import router as tasks_router
 
 logger = logging.getLogger("app")
@@ -30,7 +31,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url=None if settings.app_env == "production" else "/docs",
         redoc_url=None,
     )
-    app.state.task_store = TaskStore()
+    engine = make_engine(settings.database_url)
+    app.state.db_engine = engine
+    app.state.task_store = PostgresTaskStore(engine)
 
     if settings.cors_origins:
         app.add_middleware(

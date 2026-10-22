@@ -89,6 +89,40 @@ for (const [template, schemaPath] of [
   });
 }
 
+test('python-service scaffolds the Postgres + SQLAlchemy/Alembic stack (P2 phase 2)', async () => {
+  const dir = path.join(tmp(), 'db-app');
+  const { target } = await scaffold({
+    template: 'python-service',
+    name: 'db-app',
+    dir,
+    owner: 'octo',
+    install: false,
+    git: true,
+  });
+  const cfg = JSON.parse(readFileSync(path.join(target, 'factory.json'), 'utf8'));
+  assert.equal(cfg.commands.migrate, 'uv run db-migrate', 'python-service factory.json needs a migrate command');
+  for (const must of ['docker-compose.yml', 'alembic.ini', 'alembic/env.py', 'src/app/db.py', 'src/app/migrate.py']) {
+    assert.ok(existsSync(path.join(target, must)), `python-service missing ${must}`);
+  }
+  const migrations = readdirSync(path.join(target, 'alembic', 'versions')).filter((f) => f.endsWith('.py'));
+  assert.equal(migrations.length, 1, 'python-service needs exactly one committed initial migration');
+  assert.match(
+    readFileSync(path.join(target, 'alembic', 'versions', migrations[0]), 'utf8'),
+    /create_table\(\s*\n?\s*"tasks"/,
+    'initial migration must create the tasks table',
+  );
+  const ci = readFileSync(path.join(target, '.github/workflows/ci.yml'), 'utf8');
+  assert.match(ci, /postgres:16/, 'python-service CI needs an ephemeral Postgres service');
+  assert.match(ci, /uv run db-migrate/, 'python-service CI must run migrations before tests');
+  assert.ok(ci.indexOf('uv run db-migrate') < ci.indexOf('uv run pytest'), 'python-service CI must migrate before pytest');
+  const compose = readFileSync(path.join(target, 'docker-compose.yml'), 'utf8');
+  assert.match(compose, /postgres:16/, 'python-service compose must pin Postgres 16');
+  const pyproject = readFileSync(path.join(target, 'pyproject.toml'), 'utf8');
+  for (const dep of ['sqlalchemy', 'alembic', 'psycopg']) {
+    assert.match(pyproject, new RegExp(`"${dep}`), `pyproject must depend on ${dep}`);
+  }
+});
+
 test('test helpers provide a default git identity without overriding the environment', () => {
   // helpers.js (imported above) sets these so git child processes work on
   // machines with no git config; values from the real environment would win.
