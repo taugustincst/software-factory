@@ -79,8 +79,17 @@ for (const [template, schemaPath] of [
       assert.ok(existsSync(path.join(target, must)), `${template} missing ${must}`);
     }
     const migrations = readdirSync(path.join(target, 'drizzle')).filter((f) => f.endsWith('.sql'));
-    assert.equal(migrations.length, 1, `${template} needs exactly one committed initial migration`);
+    assert.equal(migrations.length, 2, `${template} needs the initial + auth migrations`);
     assert.match(readFileSync(path.join(target, 'drizzle', migrations[0]), 'utf8'), /CREATE TABLE "tasks"/);
+    // P2 phase 3: the second migration adds the auth tables, and the auth
+    // module + routes ship in the scaffold.
+    assert.match(readFileSync(path.join(target, 'drizzle', migrations[1]), 'utf8'), /CREATE TABLE "users"/);
+    assert.match(readFileSync(path.join(target, 'drizzle', migrations[1]), 'utf8'), /CREATE TABLE "sessions"/);
+    const authBase = template === 'fullstack' ? 'server' : 'src';
+    for (const must of [`${authBase}/auth.ts`, `${authBase}/routes/auth.ts`]) {
+      assert.ok(existsSync(path.join(target, must)), `${template} missing ${must}`);
+    }
+    assert.match(readFileSync(path.join(target, authBase, 'db', 'schema.ts'), 'utf8'), /passwordHash/);
     const ci = readFileSync(path.join(target, '.github/workflows/ci.yml'), 'utf8');
     assert.match(ci, /postgres:16/, `${template} CI needs an ephemeral Postgres service`);
     assert.match(ci, /npm run db:migrate/, `${template} CI must run migrations before tests`);
@@ -104,13 +113,23 @@ test('python-service scaffolds the Postgres + SQLAlchemy/Alembic stack (P2 phase
   for (const must of ['docker-compose.yml', 'alembic.ini', 'alembic/env.py', 'src/app/db.py', 'src/app/migrate.py']) {
     assert.ok(existsSync(path.join(target, must)), `python-service missing ${must}`);
   }
-  const migrations = readdirSync(path.join(target, 'alembic', 'versions')).filter((f) => f.endsWith('.py'));
-  assert.equal(migrations.length, 1, 'python-service needs exactly one committed initial migration');
+  const migrations = readdirSync(path.join(target, 'alembic', 'versions'))
+    .filter((f) => f.endsWith('.py'))
+    .sort();
+  assert.equal(migrations.length, 2, 'python-service needs the initial + auth migrations');
   assert.match(
     readFileSync(path.join(target, 'alembic', 'versions', migrations[0]), 'utf8'),
     /create_table\(\s*\n?\s*"tasks"/,
     'initial migration must create the tasks table',
   );
+  // P2 phase 3: the second migration adds the auth tables, and the auth module ships.
+  assert.match(
+    readFileSync(path.join(target, 'alembic', 'versions', migrations[1]), 'utf8'),
+    /create_table\(\s*\n?\s*"users"/,
+    'auth migration must create the users table',
+  );
+  assert.ok(existsSync(path.join(target, 'src/app/auth.py')), 'python-service missing src/app/auth.py');
+  assert.match(readFileSync(path.join(target, 'pyproject.toml'), 'utf8'), /"argon2-cffi/);
   const ci = readFileSync(path.join(target, '.github/workflows/ci.yml'), 'utf8');
   assert.match(ci, /postgres:16/, 'python-service CI needs an ephemeral Postgres service');
   assert.match(ci, /uv run db-migrate/, 'python-service CI must run migrations before tests');

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from app.config import Settings
-from app.db import TaskRow, make_engine, make_session_factory
+from app.db import SessionRow, TaskRow, UserRow, make_engine, make_session_factory
 from app.main import create_app
 from app.migrate import run_migrations
 
@@ -24,9 +24,11 @@ def _migrated_db() -> None:
 
 
 @pytest.fixture(autouse=True)
-def _clean_tasks() -> None:
+def _clean_tables() -> None:
     engine = make_engine(DATABASE_URL)
     with make_session_factory(engine)() as session:
+        session.execute(delete(SessionRow))
+        session.execute(delete(UserRow))
         session.execute(delete(TaskRow))
         session.commit()
     engine.dispose()

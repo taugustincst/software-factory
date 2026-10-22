@@ -6,7 +6,13 @@
   --accent: #2563eb;
   --danger: #b91c1c;
   color-scheme: light dark;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -37,6 +43,27 @@ h1 {
 }
 .muted {
   color: var(--muted);
+}
+.auth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 24px 0 12px;
+}
+.auth input {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+}
+.account {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 24px 0 12px;
 }
 .add {
   display: flex;
