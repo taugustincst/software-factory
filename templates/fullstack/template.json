@@ -1,6 +1,6 @@
 {
   "title": "Full-stack web app",
-  "stack": "React 19 · Vite · TypeScript · Fastify API · Postgres 16 · Drizzle · session auth (argon2id) · Vitest + Testing Library · Playwright e2e · Docker",
+  "stack": "React 19 · Vite · TypeScript · Fastify API · Postgres 16 · Drizzle · session auth (argon2id) · OpenTelemetry (opt-in) · Vitest + Testing Library · Playwright e2e · Docker",
   "defaultDescription": "Full-stack web application",
   "vars": {
     "codeqlLanguage": "javascript-typescript",

@@ -1,6 +1,6 @@
 {
   "title": "Python integration service",
-  "stack": "Python 3.13 · FastAPI · Pydantic · Postgres 16 · SQLAlchemy 2 · Alembic · session auth (argon2id) · uv · pytest · Ruff · mypy · Docker",
+  "stack": "Python 3.13 · FastAPI · Pydantic · Postgres 16 · SQLAlchemy 2 · Alembic · session auth (argon2id) · OpenTelemetry (opt-in) · uv · pytest · Ruff · mypy · Docker",
   "defaultDescription": "HTTP integration service",
   "vars": {
     "codeqlLanguage": "python",

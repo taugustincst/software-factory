@@ -9,6 +9,7 @@ import { authRoutes } from './routes/auth.js';
 import { healthRoutes } from './routes/health.js';
 import { taskRoutes } from './routes/tasks.js';
 import { PostgresTaskStore, type TaskStore } from './tasks.js';
+import { traceLogFields } from './tracing.js';
 
 export interface BuildAppOptions {
   /** Inject a store (tests pass one backed by a shared test database). Otherwise one is created from config. */
@@ -23,6 +24,8 @@ export function buildApp(config: Config, options: BuildAppOptions = {}): Fastify
       level: config.LOG_LEVEL,
       // Never log credentials or request bodies that may hold personal data.
       redact: ['req.headers.authorization', 'req.headers.cookie', 'req.body'],
+      // Correlate each log line with the active trace, when tracing is on.
+      mixin: () => traceLogFields(),
     },
     bodyLimit: config.BODY_LIMIT_BYTES,
     genReqId: () => crypto.randomUUID(),

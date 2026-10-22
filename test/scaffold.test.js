@@ -193,6 +193,72 @@ test('service templates ship no Playwright (P2 phase 4 is UI-only)', async () =>
   }
 });
 
+for (const [template, base, entry, testFile] of [
+  ['node-service', 'src', 'src/server.ts', 'test/tracing.test.ts'],
+  ['fullstack', 'server', 'server/index.ts', 'server/tracing.test.ts'],
+]) {
+  test(`${template} scaffolds OpenTelemetry tracing (P2 phase 5)`, async () => {
+    const dir = path.join(tmp(), 'otel-app');
+    const { target } = await scaffold({ template, name: 'otel-app', dir, owner: 'octo', install: false, git: true });
+    assert.ok(existsSync(path.join(target, base, 'tracing.ts')), `${template} missing ${base}/tracing.ts`);
+    assert.ok(existsSync(path.join(target, testFile)), `${template} missing ${testFile}`);
+    const pkg = JSON.parse(readFileSync(path.join(target, 'package.json'), 'utf8'));
+    for (const dep of [
+      '@opentelemetry/api',
+      '@opentelemetry/sdk-node',
+      '@opentelemetry/exporter-trace-otlp-http',
+      '@opentelemetry/instrumentation-http',
+      '@fastify/otel',
+      '@opentelemetry/sdk-trace-base',
+    ]) {
+      assert.ok(pkg.dependencies[dep], `${template} must depend on ${dep}`);
+    }
+    // Off by default: the entry starts tracing (a no-op without the env),
+    // the endpoint only appears commented out in .env.example, and the
+    // logger correlates trace ids via the mixin in the app factory.
+    assert.match(readFileSync(path.join(target, entry), 'utf8'), /initTracing\(\)/);
+    assert.match(readFileSync(path.join(target, '.env.example'), 'utf8'), /# OTEL_EXPORTER_OTLP_ENDPOINT=/);
+    assert.match(readFileSync(path.join(target, base, 'app.ts'), 'utf8'), /traceLogFields/);
+    assert.match(readFileSync(path.join(target, 'README.md'), 'utf8'), /## Observability/);
+    assert.match(readFileSync(path.join(target, 'README.md'), 'utf8'), /off by default/i);
+  });
+}
+
+test('python-service scaffolds OpenTelemetry tracing (P2 phase 5)', async () => {
+  const dir = path.join(tmp(), 'otel-app');
+  const { target } = await scaffold({
+    template: 'python-service',
+    name: 'otel-app',
+    dir,
+    owner: 'octo',
+    install: false,
+    git: true,
+  });
+  assert.ok(existsSync(path.join(target, 'src/app/telemetry.py')), 'python-service missing src/app/telemetry.py');
+  assert.ok(existsSync(path.join(target, 'tests/test_telemetry.py')), 'python-service missing tests/test_telemetry.py');
+  const pyproject = readFileSync(path.join(target, 'pyproject.toml'), 'utf8');
+  for (const dep of ['opentelemetry-sdk', 'opentelemetry-exporter-otlp-proto-http', 'opentelemetry-instrumentation-fastapi']) {
+    assert.match(pyproject, new RegExp(`"${dep}`), `pyproject must depend on ${dep}`);
+  }
+  assert.match(readFileSync(path.join(target, 'src/app/config.py'), 'utf8'), /otel_exporter_otlp_endpoint/);
+  assert.match(readFileSync(path.join(target, 'src/app/main.py'), 'utf8'), /configure_telemetry/);
+  assert.match(readFileSync(path.join(target, '.env.example'), 'utf8'), /# OTEL_EXPORTER_OTLP_ENDPOINT=/);
+  assert.match(readFileSync(path.join(target, 'README.md'), 'utf8'), /## Observability/);
+});
+
+test('static-html ships no OpenTelemetry (P2 phase 5 is service-only)', async () => {
+  const dir = path.join(tmp(), 'no-otel-app');
+  const { target } = await scaffold({
+    template: 'static-html',
+    name: 'no-otel-app',
+    dir,
+    owner: 'octo',
+    install: false,
+    git: true,
+  });
+  assert.doesNotMatch(readFileSync(path.join(target, 'package.json'), 'utf8'), /opentelemetry/i);
+});
+
 test('test helpers provide a default git identity without overriding the environment', () => {
   // helpers.js (imported above) sets these so git child processes work on
   // machines with no git config; values from the real environment would win.

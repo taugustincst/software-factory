@@ -2,7 +2,7 @@
 
 {{factory.description}}. Built from the [software-factory](https://github.com/taugustincst/software-factory) `fullstack` template.
 
-**Stack:** React 19 + Vite (client), Fastify + Zod (API), Postgres 16 with Drizzle ORM and committed migrations, self-hosted session auth (argon2id), TypeScript strict throughout, Vitest projects for web (jsdom + Testing Library) and server, Playwright end-to-end tests, coverage gates, single Docker image serving both.
+**Stack:** React 19 + Vite (client), Fastify + Zod (API), Postgres 16 with Drizzle ORM and committed migrations, self-hosted session auth (argon2id), OpenTelemetry tracing (opt-in), TypeScript strict throughout, Vitest projects for web (jsdom + Testing Library) and server, Playwright end-to-end tests, coverage gates, single Docker image serving both.
 
 ## Quick start
 
@@ -59,6 +59,25 @@ In CI the browser is installed with `npx playwright install --with-deps chromium
 ## Auth
 
 Self-hosted session auth: `server/auth.ts` + `server/routes/auth.ts` (rate-limited credential endpoints, 10 attempts / 15 min / IP; argon2id password hashes via @node-rs/argon2; the cookie carries a random token, the database stores only an HMAC of it keyed by `SESSION_SECRET`). `POST /api/auth/register|login|logout`, protected example `GET /api/me`, RBAC example `GET /api/admin` (`requireRole('admin')` chained after `requireAuth`). The React app ships a login/register form and renders a protected account panel only when `/api/me` accepts the session. Registration always creates role `user`; promote in the database to make an admin. Set a real `SESSION_SECRET` in production — the server refuses to start in production with the dev default.
+
+## Observability
+
+OpenTelemetry tracing is built in but **off by default** — with no `OTEL_*` env set the app starts no SDK, opens no exporter connection and behaves exactly as before. To turn it on, point it at any OTLP/HTTP collector:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318   # base URL; /v1/traces is appended
+OTEL_SERVICE_NAME=fullstack                         # optional; labels this service's spans
+```
+
+Run a local collector, for example:
+
+```bash
+docker run --rm -p 4318:4318 otel/opentelemetry-collector-contrib:latest
+```
+
+Vendor backends that accept OTLP (Grafana Cloud, Honeycomb, …) work the same way — just change the endpoint (and add their auth header via the standard `OTEL_EXPORTER_OTLP_HEADERS` env var); there is no vendor SDK in the codebase. Set `OTEL_SDK_DISABLED=true` to force tracing off even when an endpoint is configured.
+
+While a request is being traced, the API's structured logs carry `trace_id` and `span_id` fields (via the logger mixin in `server/app.ts`), so a log line can be correlated with its trace. Spans only contain routes, methods and status codes — never add headers, request bodies or other sensitive data as span attributes.
 
 ## Building features
 
