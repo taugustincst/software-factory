@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/taugustincst/software-factory/compare/v0.3.0...v0.4.0) (2026-10-28)
+
+
+### Features
+
+* **readiness:** implement the Autonomy Maturity Model — readiness + outcomes, Level 4 floor ([#27](https://github.com/taugustincst/software-factory/issues/27)) ([2eb452a](https://github.com/taugustincst/software-factory/commit/2eb452a57a0e4a1963e47fabccb5cc47f8d1fe79))
+
+
+### Bug Fixes
+
+* **hooks:** restore executable bit on the pre-commit hooks ([38cdc87](https://github.com/taugustincst/software-factory/commit/38cdc87d50ecd3a0da5206299c9a25712f6cd0b6))
+* **hooks:** restore executable bit on the pre-commit hooks ([c5f330e](https://github.com/taugustincst/software-factory/commit/c5f330e3ef693fe7657bd5462243b6d26266317c))
+
 ## [0.3.0](https://github.com/taugustincst/software-factory/compare/v0.2.0...v0.3.0) (2026-10-22)
 
 
