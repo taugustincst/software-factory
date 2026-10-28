@@ -5,6 +5,7 @@
   "commands": {
     "install": "npm ci",
     "lint": "npm run lint",
-    "test": "npm test"
+    "test": "npm test",
+    "coverage": "node scripts/coverage.js --cov-fail-under=89 --cov-fail-under-branches=76 --cov-fail-under-functions=87"
   }
 }
