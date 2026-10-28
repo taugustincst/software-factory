@@ -141,6 +141,10 @@ Issue text reaches scripts only through environment variables, never `${{ }}` in
 
 `factory upgrade` brings an existing project up to the current template version without flattening local edits. It re-renders the project's template with the project's own values, then three-way merges: files you never touched fast-forward, files the template never changed keep your version, and files changed on both sides go through a real merge — clean merges apply, true conflicts leave markers (or a `<file>.factory-new` copy for binaries) and exit non-zero. The merge base is the pristine snapshot recorded at scaffold time in `.factory/upgrade/`, or, for older projects, the scaffold commit recovered from git history. Lockfiles are never touched, a clean tree is required (commit or stash first), and `--dry-run` reports the whole plan without writing. Afterwards the snapshot is refreshed, so the next upgrade merges against the new base.
 
+### Autonomy Maturity Model (readiness & outcomes)
+
+`factory readiness [dir ...]` scores repos against the Autonomy Maturity Model: 51 binary signals across eight pillars (style, build, testing, documentation, dev environment, code quality, observability, security), points by level (L1 = 1 … L5 = 16), and cumulative level thresholds — **Level 3 (≥ 36) is the agent-ready bar**. It prints per-pillar scores and the cheapest remediation first, reports Organizational Readiness (% of repos at L3+) when scoring several repos, and `--fail-below 3` makes it a CI gate. `factory outcomes` aggregates the model's lagging indicators from `.factory/runs/`: cycle time, autonomy ratio (first-try passes with no review loops), cost per change and review loops; incident MTTR is not recorded in run records and is reported as n/a rather than estimated. Generated projects start at Level 3+ by construction (the current templates measure Level 4); this repo measures Level 4 (61 points, including a coverage gate on its own suite enforced in CI). The full model, signal catalog and measured baseline live in [docs/autonomy-maturity.md](docs/autonomy-maturity.md).
+
 ### Dashboard
 
 `factory dashboard` serves a local page showing every run, each stage's gate checks per attempt, live agent logs, events, cost, branch and PR link, plus a form to start new runs. A running run can be cancelled from its detail page (the CLI stops cooperatively, saves the run as `cancelled` and releases the repo lock; Ctrl-C or SIGTERM does the same for terminal runs), and the detail page also shows the launcher output for dashboard-started runs. It binds to 127.0.0.1 only, rejects foreign `Host` headers (DNS rebinding) and cross-origin POSTs (CSRF), and sends a strict CSP.
@@ -173,6 +177,8 @@ factory run (--spec <file> | --request <text>) [--dir] [--stages spec,plan,…] 
             [--model <name>] [--review-model <name>]
 factory ship --run-id <id> [--issue <n>] [--no-push]
 factory runs [--dir]
+factory readiness [dir ...] [--json] [--fail-below <0-5>]
+factory outcomes [--dir] [--json]
 factory dashboard [--dir] [--port 4545]
 factory upgrade [--dir] [--dry-run]
 factory doctor

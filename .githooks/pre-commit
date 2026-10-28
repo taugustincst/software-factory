@@ -1,0 +1,21 @@
+#!/bin/sh
+# Pre-commit hook for the software factory repo: run the repo lint when any
+# linted file is staged. Template trees (templates/**/files/) are excluded
+# from this repo's lint on purpose — they are verified by the smoke test —
+# so a commit touching only template files skips the check.
+# Enable once per clone:  git config core.hooksPath .githooks
+set -eu
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+linted=$(printf '%s\n' "$staged" | grep -E '\.(js|mjs|json|md|yml|yaml)$' | grep -v '^templates/.*/files/' || true)
+if [ -z "$linted" ]; then
+  exit 0
+fi
+
+if [ ! -d node_modules ]; then
+  echo "pre-commit: node_modules missing; run 'npm ci' first (skipping lint)" >&2
+  exit 0
+fi
+
+echo "pre-commit: running npm run lint on the staged change set…"
+npm run lint
