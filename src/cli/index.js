@@ -8,6 +8,8 @@ import { runPipeline, shipRun } from '../pipeline/runner.js';
 import { claudeExecutor, mockExecutor } from '../pipeline/executors.js';
 import { listRuns, RUN_ID_RE } from '../pipeline/store.js';
 import { STAGES } from '../pipeline/stages.js';
+import { scoreRepo, orgReadiness } from '../readiness/score.js';
+import { aggregateOutcomes } from '../readiness/outcomes.js';
 
 const VERSION = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
@@ -20,6 +22,8 @@ Usage
   factory run --spec <file> | --request <text>   Run spec → plan → build → test → review → ship
   factory ship --run-id <id> [--issue <n>]        Push and open a PR for a run that passed (CI ship job)
   factory runs [--dir <dir>]                     List pipeline runs
+  factory readiness [dir ...] [--fail-below <n>] Score repos against the Autonomy Maturity Model
+  factory outcomes [--dir <dir>]                 Aggregate outcome metrics from pipeline runs
   factory dashboard [--dir <dir>] [--port 4545]  Open the pipeline dashboard
   factory upgrade [--dir <dir>] [--dry-run]      Merge current template changes into an existing project
   factory doctor                                 Check required tools
@@ -57,6 +61,15 @@ run options
 upgrade options
   --dir <path>            Project to upgrade (default .)
   --dry-run               Report what would change without writing anything
+
+readiness options
+  [dir ...]               Repositories to score (default .)
+  --json                  Print the full reports as JSON
+  --fail-below <0-5>      Exit 1 if any scored repo is below this maturity level
+
+outcomes options
+  --dir <path>            Repository whose .factory runs to aggregate (default .)
+  --json                  Print the metrics as JSON
 `;
 
 function fail(msg) {
@@ -335,6 +348,80 @@ async function cmdRuns(argv) {
   }
 }
 
+async function cmdReadiness(argv) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: { json: { type: 'boolean' }, 'fail-below': { type: 'string' } },
+  });
+  let failBelow = null;
+  if (values['fail-below'] !== undefined) {
+    failBelow = Number(values['fail-below']);
+    if (!Number.isInteger(failBelow) || failBelow < 0 || failBelow > 5) fail('--fail-below must be an integer from 0 to 5');
+  }
+  const dirs = (positionals.length ? positionals : ['.']).map((d) => path.resolve(d));
+  for (const d of dirs) if (!existsSync(d)) fail(`no such directory: ${d}`);
+  const reports = [];
+  for (const d of dirs) reports.push(await scoreRepo(d));
+  if (values.json) {
+    const json = reports.map((r) => ({
+      ...r,
+      results: r.results.map(({ signal, pass }) => ({
+        id: signal.id,
+        pillar: signal.pillar,
+        level: signal.level,
+        points: signal.points,
+        pass,
+      })),
+      remediation: r.remediation.map((s) => s.id),
+    }));
+    process.stdout.write(`${JSON.stringify(dirs.length > 1 ? { repos: json, org: orgReadiness(reports) } : json[0], null, 2)}\n`);
+  } else {
+    for (const r of reports) {
+      process.stdout.write(
+        `\n${color.bold(r.name)}  ${color.bold(`Level ${r.level}`)}  score ${r.score}  ${r.agentReady ? color.green('✓ agent-ready (L3+)') : color.yellow('not agent-ready (below L3)')}\n`,
+      );
+      for (const [num, pillar] of Object.entries(r.pillars)) {
+        process.stdout.write(
+          `  ${num}. ${pillar.name.padEnd(38)} ${String(pillar.score).padStart(3)}  missing: ${pillar.missing.join(', ') || '—'}\n`,
+        );
+      }
+      const top = r.remediation.slice(0, 5);
+      if (top.length) {
+        process.stdout.write(`  Top remediation:\n`);
+        for (const s of top) process.stdout.write(`    - [L${s.level} · ${s.points} pts] ${s.id}: ${s.remediation}\n`);
+      }
+    }
+    if (reports.length > 1) {
+      const org = orgReadiness(reports);
+      process.stdout.write(
+        `\n${color.bold('Organizational Readiness')}: ${org.ready}/${org.total} repos at Level 3+ (${org.pct}%)\n`,
+      );
+    }
+  }
+  if (failBelow !== null && reports.some((r) => r.level < failBelow)) process.exit(1);
+}
+
+async function cmdOutcomes(argv) {
+  const { values } = parseArgs({ args: argv, options: { dir: { type: 'string', default: '.' }, json: { type: 'boolean' } } });
+  const dir = path.resolve(values.dir);
+  const runs = await listRuns(dir);
+  const metrics = aggregateOutcomes(runs);
+  if (values.json) return process.stdout.write(`${JSON.stringify(metrics, null, 2)}\n`);
+  if (!runs.length) return process.stdout.write('No runs recorded yet — outcomes will appear after the first pipeline run.\n');
+  const pct = (x) => (x === null ? 'n/a' : `${Math.round(x * 100)}%`);
+  const min = (x) => (x === null ? 'n/a' : `${x.toFixed(1)} min`);
+  const usd = (x) => (x === null ? 'n/a' : `$${x.toFixed(2)}`);
+  process.stdout.write(
+    `Runs: ${metrics.totalRuns} total, ${metrics.completedRuns} completed, ${metrics.passedRuns} passed\n` +
+      `Autonomy ratio: ${pct(metrics.autonomyRatio)} (${metrics.autonomousRuns} runs passed first-try with no review loops)\n` +
+      `Cycle time: mean ${min(metrics.meanCycleMinutes)}, median ${min(metrics.medianCycleMinutes)}\n` +
+      `Cost: ${usd(metrics.totalCostUsd)} total, ${usd(metrics.costPerChangeUsd)} per passed run\n` +
+      `Review loops: ${metrics.totalReviewLoops}\n` +
+      `Incident MTTR: n/a — ${metrics.notes}\n`,
+  );
+}
+
 async function cmdDashboard(argv) {
   const { values } = parseArgs({
     args: argv,
@@ -389,6 +476,10 @@ export async function main(argv) {
         return await cmdShip(rest);
       case 'runs':
         return await cmdRuns(rest);
+      case 'readiness':
+        return await cmdReadiness(rest);
+      case 'outcomes':
+        return await cmdOutcomes(rest);
       case 'upgrade':
         return await cmdUpgrade(rest);
       case 'dashboard':
