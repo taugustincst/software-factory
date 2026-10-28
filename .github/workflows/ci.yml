@@ -27,8 +27,33 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      # The factory ships zero runtime dependencies, so the tree a consumer
+      # installs is the production tree: gate exactly that surface at high
+      # severity. (Dev-only tooling — eslint/prettier — is lockfile-pinned and
+      # Dependabot-managed; a full-tree audit is not the gate.)
+      - name: Audit dependencies (production surface, high+)
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm test
+      # Coverage gate on the Node 24 leg only: the suite runs twice more on
+      # the other legs without it, and scripts/coverage.js behaves the same
+      # on 22/24, so one leg enforces the thresholds for the whole matrix.
+      - name: Coverage gate (thresholds in package.json)
+        if: matrix.node == 24
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee coverage-report.txt
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-diagnostics-node-${{ matrix.node }}
+          path: |
+            coverage-report.txt
+            /home/runner/.npm/_logs/**
+          if-no-files-found: ignore
+          retention-days: 7
 
   test-windows:
     name: Unit tests (Windows, Node 24)
