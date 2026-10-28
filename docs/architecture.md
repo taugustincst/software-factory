@@ -12,6 +12,13 @@ src/pipeline/
   executors.js                claude (headless Claude Code, stream-json) and mock executors
   runner.js                   the loop: attempts, feedback, review rewinds, ship
   store.js                    .factory/runs/<id>/run.json (atomic writes) and per-attempt logs
+src/readiness/
+  model.js                    AMM pillars, points-by-level, signal factory
+  context.js                  one repo-tree walk + cached text/manifest accessors for probes
+  signals.js                  signal catalog, pillars 1-4 (aggregates signals-extended.js)
+  signals-extended.js         signal catalog, pillars 5-8
+  score.js                    scoreRepo(), level thresholds, orgReadiness()
+  outcomes.js                 aggregateOutcomes() over .factory run records
 src/dashboard/                local HTTP server + single-page UI
 claude-kit/.claude/           agents, commands, skills, hooks, settings, FACTORY.md
   hooks/lib/patterns.mjs      single source of truth for secret, PHI, command and path rules
