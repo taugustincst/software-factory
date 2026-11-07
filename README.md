@@ -181,6 +181,14 @@ factory improve approve <id>        # then: factory improve apply <id>
 
 A light, deterministic Steward pass runs after every `factory run` (`improvement.afterRun`). The roles (`factory-improver`, `factory-decider`, `factory-steward`) ship in the kit and are pinned in `.claude/factory-roles.json`. Their models and the approval mode live in `factory.json` (`models`, `improvement`). Design: [docs/self-improvement.md](docs/self-improvement.md). The agents work through the factory's own [tool harness](docs/harness.md).
 
+### Other LLMs (providers and routing)
+
+Every stage can run on a different LLM: Claude Code (the default), the Anthropic API, or anything OpenAI-compatible (OpenAI, Gemini, OpenRouter, Groq, a local Ollama). Configure `providers` and `routing` in `factory.json`.
+
+The first available model in each stage's chain runs. Unavailable ones (no key, API down, rate-limited) are skipped, and `escalateOnRetry` moves a retry to a stronger model.
+
+Other LLMs work through the factory harness with exactly their role's permissions. Keys come only from environment variables. `factory providers` shows what is available and how each stage is routed; `--provider openai:gpt-4.1` sends a whole run to one model. Details: [docs/providers.md](docs/providers.md).
+
 ### Inspector (release quality)
 
 Every run now has an `inspect` stage between review and ship. The Inspector re-verifies the candidate itself instead of trusting earlier summaries:

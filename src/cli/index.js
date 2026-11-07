@@ -12,6 +12,8 @@ import { scoreRepo, orgReadiness } from '../readiness/score.js';
 import { aggregateOutcomes } from '../readiness/outcomes.js';
 import { cmdSteward, cmdImprove, afterRunHook, applyInline, IMPROVE_HELP } from './improve.js';
 import { cmdInspect, INSPECT_HELP } from './inspect.js';
+import { cmdProviders, PROVIDERS_HELP } from './providers.js';
+import { routedExecutor } from '../providers/router.js';
 import { loadProject } from '../pipeline/project.js';
 import { resolveConfig } from '../improve/config.js';
 import { listProposals, PROPOSAL_ID_RE } from '../improve/store.js';
@@ -33,6 +35,7 @@ Usage
   factory steward [--dir <dir>] [--apply]        Steward: evidence, proposals, ranking, digest (self-improvement)
   factory improve [list|show|approve|reject|apply|revert] [id]   The improvement backlog
   factory inspect --run-id <id> | --post-release  Inspector: re-inspect a run, or watch main after a release
+  factory providers [--dir <dir>]                 The LLMs the factory can use, their availability and routing
   factory upgrade [--dir <dir>] [--dry-run]      Merge current template changes into an existing project
   factory doctor                                 Check required tools
 
@@ -67,6 +70,7 @@ run options
   --resume <run-id>       Resume a paused run from its next stage (no --spec/--request needed)
   --proposal <id>         Record that this run applies an improvement proposal (used by the dashboard)
   --no-improve            Skip the after-run Steward pass (factory.json improvement.afterRun)
+  --provider <p[:model]>  Use this LLM for every stage, e.g. openai:gpt-4.1, ollama:llama3.1, anthropic:<model>
 
 upgrade options
   --dir <path>            Project to upgrade (default .)
@@ -88,7 +92,7 @@ dashboard options
   --allow-host <h[:port]> Also accept this Host/Origin, e.g. your Tailscale name or IP.
                           Repeatable; required when --host is not loopback
                           (env FACTORY_DASHBOARD_ALLOW_HOST, comma-separated)
-${IMPROVE_HELP}${INSPECT_HELP}`;
+${IMPROVE_HELP}${INSPECT_HELP}${PROVIDERS_HELP}`;
 
 function fail(msg) {
   process.stderr.write(`${color.red('error')} ${msg}\n`);
@@ -185,6 +189,7 @@ async function cmdRun(argv) {
       resume: { type: 'string' },
       proposal: { type: 'string' },
       'no-improve': { type: 'boolean' },
+      provider: { type: 'string' },
     },
   });
   if (values.proposal && !PROPOSAL_ID_RE.test(values.proposal)) fail('invalid --proposal id');
@@ -200,13 +205,25 @@ async function cmdRun(argv) {
     return n;
   };
 
+  const project = await loadProject(path.resolve(values.dir));
   let executor;
   if (values.executor === 'mock') executor = mockExecutor({ delayMs: Number(process.env.FACTORY_MOCK_DELAY_MS ?? 0) });
   else if (values.executor === 'claude') {
-    if (!(await which('claude'))) fail('Claude Code CLI not found. Install it: npm install -g @anthropic-ai/claude-code');
     const mult = Number(values['budget-multiplier']);
     if (!(mult > 0 && mult <= 20)) fail('--budget-multiplier must be > 0 and ≤ 20');
-    executor = claudeExecutor({ model: values.model, reviewModel: values['review-model'], budgetMultiplier: mult });
+    if (values.provider || project.config?.providers || project.config?.routing) {
+      // Multi-provider: each stage uses the LLMs factory.json routes it to, with fallback.
+      executor = routedExecutor({
+        config: project.config,
+        override: values.provider ?? null,
+        legacy: { model: values.model, reviewModel: values['review-model'] },
+        budgetMultiplier: mult,
+        log: (m) => process.stdout.write(`${color.yellow('!')} ${m}\n`),
+      });
+    } else {
+      if (!(await which('claude'))) fail('Claude Code CLI not found. Install it: npm install -g @anthropic-ai/claude-code');
+      executor = claudeExecutor({ model: values.model, reviewModel: values['review-model'], budgetMultiplier: mult });
+    }
   } else fail(`unknown executor "${values.executor}" (claude | mock)`);
 
   // Ctrl-C / SIGTERM cancel the run cooperatively: the pipeline stops at its
@@ -222,7 +239,6 @@ async function cmdRun(argv) {
   };
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
-  const project = await loadProject(path.resolve(values.dir));
   const afterRun = values['no-improve']
     ? null
     : afterRunHook({ dir: path.resolve(values.dir), executor, config: project.config });
@@ -554,6 +570,8 @@ export async function main(argv) {
         return await cmdImprove(rest);
       case 'inspect':
         return await cmdInspect(rest);
+      case 'providers':
+        return await cmdProviders(rest);
       case 'doctor':
         return await cmdDoctor();
       case '--version':

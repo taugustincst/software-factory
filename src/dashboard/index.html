@@ -1061,7 +1061,22 @@
                   att?.summary ? el('div', { class: 'summary' }, att.summary) : null,
                   att?.error ? el('div', { class: 'summary s-failed' }, att.error) : null,
                 ),
-                el('div', { class: 'card' }, el('h3', {}, el('span', {}, att ? `Log · ${att.log}` : 'Log')), logPre),
+                el(
+                  'div',
+                  { class: 'card' },
+                  el(
+                    'h3',
+                    {},
+                    el(
+                      'span',
+                      {},
+                      att
+                        ? `Log · ${att.log}${att.provider ? ` · ${att.provider}${att.model ? `:${att.model}` : ''}` : ''}`
+                        : 'Log',
+                    ),
+                  ),
+                  logPre,
+                ),
               ),
               el('h2', {}, 'Launcher output'),
               el('div', { class: 'card' }, el('pre', { class: 'log', id: 'launcher-log' }, 'Loading…')),

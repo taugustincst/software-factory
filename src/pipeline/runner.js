@@ -334,10 +334,16 @@ async function runPipelineLocked({
         prompt,
         dir,
         ctx,
+        attempt: attempt.n,
         onData: (d) => appendLog(dir, runId, logName, d).catch(() => {}),
       });
       state.costUsd += result.costUsd ?? 0;
       attempt.costUsd = result.costUsd ?? 0;
+      // Which LLM did the work (the routed executor may pick, fall back or escalate).
+      attempt.provider = result.provider ?? executor.name;
+      if (result.model) attempt.model = result.model;
+      if (result.skipped?.length) attempt.skipped = result.skipped;
+      if (result.unpriced) attempt.unpriced = true;
       const auditAfter = summarizeAudit(ctx.harnessConfig.auditFile);
       attempt.harness = {
         role: ctx.harnessConfig.role,
@@ -460,6 +466,8 @@ async function inspectStage({ ctx, state, project, executor, logName, attempt, c
       });
       state.costUsd += r.costUsd ?? 0;
       attempt.costUsd = r.costUsd ?? 0;
+      attempt.provider = r.provider ?? executor.name;
+      if (r.model) attempt.model = r.model;
       const review = parseModelReview(r.summary);
       const level = settings.rubric['model-review'];
       if (!review)

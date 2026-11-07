@@ -49,6 +49,8 @@ export function runObservations(dir, run) {
     reviewLoops: run.reviewLoops ?? 0,
     stages: {},
     gateFails: new Set(),
+    providers: {},
+    fallbacks: 0,
   };
   for (const s of run.stages ?? []) {
     const attempts = s.attempts ?? [];
@@ -57,6 +59,8 @@ export function runObservations(dir, run) {
       st.cost += a.costUsd ?? 0;
       if (i > 0) st.retryCost += a.costUsd ?? 0;
       st.seconds += secs(a.startedAt, a.finishedAt);
+      if (a.provider) obs.providers[a.provider] = (obs.providers[a.provider] ?? 0) + (a.costUsd ?? 0);
+      obs.fallbacks += a.skipped?.length ?? 0;
       for (const c of a.gate ?? [])
         if (!c.ok && c.severity !== 'warn') obs.gateFails.add(`${s.id}:${slug(c.name.split(':')[0])}`);
     });
@@ -100,6 +104,11 @@ export function buildEvidence(runs, { dir = null, recurrenceMin = 3, now = new D
       add(`harness-refused:${k}`, 'count', `harness refusals for ${k.replace(':', ' calling ')}`, o.id, n);
     for (const f of o.findings) add(`review-finding:${slug(f)}`, 'count', `runs whose review raised: "${f}"`, o.id);
     for (const c of o.inspectorHolds) add(`inspector-hold:${c}`, 'count', `runs the Inspector held on ${c}`, o.id);
+    for (const [p, usd] of Object.entries(o.providers)) {
+      add(`provider-runs:${p}`, 'count', `runs that used ${p}`, o.id);
+      if (usd > 0) add(`cost-provider:${p}`, 'usd', `USD spent on ${p}`, o.id, usd);
+    }
+    if (o.fallbacks) add('provider-fallbacks', 'count', 'times the router skipped an unavailable provider', o.id, o.fallbacks);
     if (o.postReleaseFail) add('post-release-fail', 'count', 'shipped runs followed by a failing main-branch CI', o.id);
   }
 
