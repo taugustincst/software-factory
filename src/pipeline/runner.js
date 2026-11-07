@@ -56,11 +56,23 @@ function uniqueArtifactDir(dir, date, slug, runId) {
 export async function runPipeline(opts) {
   const runId = opts.runId ?? opts.resumeRunId ?? newRunId();
   const lock = await acquireRunLock(path.resolve(opts.dir), runId);
+  let state;
   try {
-    return await runPipelineLocked({ ...opts, runId });
+    state = await runPipelineLocked({ ...opts, runId });
   } finally {
     await lock.release();
   }
+  // The Steward's light pass (or whatever the caller hooks in) runs after every finished
+  // run. It is best-effort: its failure is logged on the run, never changes its status.
+  if (opts.afterRun && state && state.status !== 'paused') {
+    try {
+      await opts.afterRun(state);
+    } catch (err) {
+      state.events.push({ at: now(), msg: `After-run improvement pass failed: ${err.message}` });
+      await saveRun(path.resolve(opts.dir), state).catch(() => {});
+    }
+  }
+  return state;
 }
 
 /**
@@ -82,6 +94,7 @@ async function runPipelineLocked({
   resumeRunId = null,
   install = true,
   issue = null,
+  proposalId = null,
   allowDirty = false,
   signal = null,
   runId = newRunId(),
@@ -119,6 +132,7 @@ async function runPipelineLocked({
     project: { name: project.name, template: project.template, commands: project.commands },
     artifactDir: rel(artifactDir),
     issue,
+    proposalId,
     ship,
     commit,
     branch: null,

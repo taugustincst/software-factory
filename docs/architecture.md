@@ -25,6 +25,14 @@ src/harness/                  the factory's own tool layer (docs/harness.md)
   sandbox.js                  path confinement (.., absolute, NUL, symlink escapes)
   index.js                    createHarness(): validation, dispatch, JSONL audit
   mcp-server.js               the harness as a stdio MCP server for Claude Code agents
+src/improve/                  self-improvement (docs/self-improvement.md)
+  evidence.js                 deterministic facts and cross-run patterns from the run store
+  validate.js                 citation gate: every claim cites a real fact and its exact value
+  approval.js                 computed risk tables and the required/auto approval regime
+  roles.js                    generative (improver) and decision (decider) stages + mock roles
+  store.js                    .factory/improvements/: proposals, audit.jsonl, digest
+  steward.js                  the Steward pass: reconcile, re-score, retire, draft, decide, digest
+  apply.js                    approve/reject, apply as a factory run, git revert
 src/dashboard/                local HTTP server + single-page UI
 claude-kit/.claude/           agents, commands, skills, hooks, settings, FACTORY.md
   hooks/lib/patterns.mjs      single source of truth for secret, PHI, command and path rules

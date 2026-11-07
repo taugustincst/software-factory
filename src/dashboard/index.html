@@ -566,6 +566,115 @@
         margin: 0;
         overflow-wrap: anywhere;
       }
+      /* Improve page: the Steward's digest and the proposal backlog. */
+      body[data-page='improve'] main,
+      body:not([data-page='improve']) #improvePage {
+        display: none;
+      }
+      #improvePage {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 16px 12px calc(48px + env(safe-area-inset-bottom));
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
+      }
+      header button {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .brand {
+        min-width: 0;
+        overflow: hidden;
+      }
+      .mode {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin: 4px 0 16px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .mode .badge.auto {
+        color: var(--warn);
+      }
+      .mode .badge.required {
+        color: var(--ok);
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        background: var(--line);
+      }
+      .stats div {
+        background: var(--panel);
+        padding: 10px 12px;
+      }
+      .stats b {
+        display: block;
+        font: 700 18px/1.2 var(--mono);
+      }
+      .stats span {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .prop {
+        padding: 12px;
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 8px;
+      }
+      .prop:first-of-type {
+        border-top: 0;
+      }
+      .prop .t {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .prop .m {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        font: 12px var(--mono);
+        color: var(--muted);
+        align-items: center;
+      }
+      .risk-low {
+        color: var(--ok);
+      }
+      .risk-medium {
+        color: var(--warn);
+      }
+      .risk-always-human {
+        color: var(--bad);
+      }
+      .prop ul {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .prop code {
+        font: 12px var(--mono);
+        overflow-wrap: anywhere;
+      }
+      .prop .acts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .prop .acts button {
+        flex: 1 1 140px;
+      }
+      details.more summary {
+        cursor: pointer;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        color: var(--accent);
+        font-size: 13px;
+      }
       /* Tablet: room for the full six-station line. */
       @media (min-width: 600px) {
         .line {
@@ -648,6 +757,9 @@
         pre.log {
           max-height: 520px;
         }
+        .stats {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
       }
     </style>
   </head>
@@ -657,6 +769,7 @@
       <div class="proj" id="proj"></div>
       <div class="spacer"></div>
       <button id="theme" type="button" aria-label="Toggle color theme">◐</button>
+      <button id="pageBtn" type="button" aria-pressed="false">Improve</button>
       <button class="primary" id="newBtn" type="button">New run</button>
     </header>
     <main>
@@ -668,6 +781,11 @@
         <div class="empty">No runs yet. Start one with <b>New run</b>, or <code>factory run --request "…"</code>.</div>
       </section>
     </main>
+
+    <section id="improvePage" aria-live="polite" aria-labelledby="improveTitle">
+      <div class="run-head"><h1 id="improveTitle">Self-improvement</h1></div>
+      <div id="improveBody"><div class="empty">Loading…</div></div>
+    </section>
 
     <dialog id="dlg" aria-labelledby="dlgTitle">
       <form id="form" method="dialog">
@@ -1033,9 +1151,155 @@
           }
         });
 
+        // ---- Improve page: digest, approval mode, proposals ----
+        const money = (n) => (n === null || n === undefined ? '–' : `$${Number(n).toFixed(2)}`);
+        async function act(id, action, btn) {
+          const label = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            await api(`/api/improvements/${id}/${action}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ executor: $('#exec').value }),
+            });
+          } catch (err) {
+            alert(err.message);
+          }
+          btn.disabled = false;
+          btn.textContent = label;
+          refreshImprove();
+        }
+        function proposalCard(p) {
+          const b = (label, action, primary) =>
+            el('button', { type: 'button', class: primary ? 'primary' : '', onclick: (e) => act(p.id, action, e.target) }, label);
+          const acts = [];
+          if (['open', 'recommended', 'needs-evidence'].includes(p.status))
+            acts.push(b('Approve & run', 'approve', true), b('Reject', 'reject'));
+          if (p.status === 'approved') acts.push(b('Run it', 'apply', true));
+          if (p.status === 'applied' && p.apply?.commit) acts.push(b('Revert', 'revert'));
+          return el(
+            'div',
+            { class: 'prop' },
+            el('span', { class: 't' }, p.title),
+            el(
+              'span',
+              { class: 'm' },
+              el(
+                'span',
+                { class: `badge s-${p.status === 'applied' ? 'passed' : p.status === 'failed' ? 'failed' : 'pending'}` },
+                p.status,
+              ),
+              el('span', { class: `risk-${p.risk}` }, `risk ${p.risk ?? '–'}`),
+              el('span', {}, `score ${p.score ?? '–'}`),
+              p.decision ? el('span', {}, `decider: ${p.decision.verdict}`) : null,
+              p.approval?.by === 'auto' ? el('span', { class: 'risk-medium' }, 'auto-approved') : null,
+              el('span', {}, p.id),
+            ),
+            el(
+              'ul',
+              {},
+              p.claims.map((c) => el('li', {}, `${c.text} `, el('code', {}, `${c.fact} = ${c.value}`))),
+            ),
+            el(
+              'details',
+              { class: 'more' },
+              el('summary', {}, 'Details'),
+              el('p', { class: 'hint' }, el('b', {}, 'Why: '), p.lesson),
+              el('p', { class: 'hint' }, el('b', {}, 'Change: '), p.change),
+              el('p', { class: 'hint' }, el('b', {}, 'Targets: '), p.targets.join(', ')),
+              p.decision?.reasoning ? el('p', { class: 'hint' }, el('b', {}, 'Decider: '), p.decision.reasoning) : null,
+              p.apply?.runId
+                ? el('p', { class: 'hint' }, el('b', {}, 'Run: '), p.apply.runId, p.apply.branch ? ` on ${p.apply.branch}` : '')
+                : null,
+            ),
+            acts.length ? el('div', { class: 'acts' }, acts) : null,
+          );
+        }
+        async function refreshImprove() {
+          let data;
+          try {
+            data = await api('/api/improvements');
+          } catch {
+            return;
+          }
+          const d = data.digest;
+          const e = d?.efficiency;
+          const open = data.proposals.filter((p) =>
+            ['open', 'recommended', 'needs-evidence', 'approved', 'applying'].includes(p.status),
+          );
+          const done = data.proposals.filter((p) => !open.includes(p));
+          $('#improveBody').replaceChildren(
+            ...[
+              el(
+                'div',
+                { class: 'mode' },
+                'Approval',
+                el('span', { class: `badge ${data.approval.mode}` }, data.approval.mode),
+                data.approval.mode === 'auto'
+                  ? `self-applies risk ≤ ${data.approval.autoMaxRisk}; gates, security and release always wait for you`
+                  : 'you approve every change',
+              ),
+              d
+                ? el(
+                    'div',
+                    { class: 'card' },
+                    el('h3', {}, el('span', {}, `Steward digest · ${d.runs} runs`), el('span', { class: 'hint' }, ago(d.at))),
+                    el(
+                      'div',
+                      { class: 'stats' },
+                      el('div', {}, el('b', {}, money(e.costPerPassedRun)), el('span', {}, 'cost per passed run')),
+                      el(
+                        'div',
+                        {},
+                        el(
+                          'b',
+                          {},
+                          e.trend.recent === null || e.trend.earlier === null
+                            ? '–'
+                            : `${money(e.trend.recent)} / ${money(e.trend.earlier)}`,
+                        ),
+                        el('span', {}, 'recent / earlier'),
+                      ),
+                      el('div', {}, el('b', {}, money(e.retryWasteUsd)), el('span', {}, 'retry waste')),
+                      el('div', {}, el('b', {}, String(e.reviewLoops)), el('span', {}, 'review loops')),
+                    ),
+                    d.watching.length
+                      ? el(
+                          'div',
+                          { class: 'summary' },
+                          `Watching: ${d.watching.map((w) => `${w.label} (${w.runs} runs)`).join('; ')}`,
+                        )
+                      : null,
+                    d.thisPass.errors.length ? el('div', { class: 'summary s-failed' }, d.thisPass.errors.join('\n')) : null,
+                  )
+                : el('p', { class: 'hint' }, 'No Steward pass yet. Run factory steward after a few runs.'),
+              el('h2', {}, `Proposals · ${open.length} open`),
+              el(
+                'div',
+                { class: 'card' },
+                open.length ? open.map(proposalCard) : el('p', { class: 'hint', style: 'padding:12px' }, 'Nothing waiting.'),
+              ),
+              done.length ? el('h2', {}, 'History') : null,
+              done.length ? el('div', { class: 'card' }, done.slice(0, 20).map(proposalCard)) : null,
+              data.warnings.length ? el('p', { class: 'err' }, data.warnings.join(' · ')) : null,
+            ].filter(Boolean),
+          );
+        }
+        $('#pageBtn').onclick = () => {
+          const improve = document.body.dataset.page !== 'improve';
+          document.body.dataset.page = improve ? 'improve' : 'runs';
+          $('#pageBtn').textContent = improve ? 'Runs' : 'Improve';
+          $('#pageBtn').setAttribute('aria-pressed', String(improve));
+          window.scrollTo(0, 0);
+          if (improve) refreshImprove();
+        };
+
         refresh();
         setInterval(() => {
-          if (!document.hidden) refresh();
+          if (document.hidden) return;
+          if (document.body.dataset.page === 'improve') refreshImprove();
+          else refresh();
         }, 2000);
       })();
     </script>

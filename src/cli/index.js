@@ -10,6 +10,10 @@ import { listRuns, RUN_ID_RE } from '../pipeline/store.js';
 import { STAGES } from '../pipeline/stages.js';
 import { scoreRepo, orgReadiness } from '../readiness/score.js';
 import { aggregateOutcomes } from '../readiness/outcomes.js';
+import { cmdSteward, cmdImprove, afterRunHook, applyInline, IMPROVE_HELP } from './improve.js';
+import { loadProject } from '../pipeline/project.js';
+import { resolveConfig } from '../improve/config.js';
+import { listProposals, PROPOSAL_ID_RE } from '../improve/store.js';
 
 const VERSION = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
@@ -25,6 +29,8 @@ Usage
   factory readiness [dir ...] [--fail-below <n>] Score repos against the Autonomy Maturity Model
   factory outcomes [--dir <dir>]                 Aggregate outcome metrics from pipeline runs
   factory dashboard [--dir <dir>] [--port 4545]  Open the pipeline dashboard (local-only by default)
+  factory steward [--dir <dir>] [--apply]        Steward: evidence, proposals, ranking, digest (self-improvement)
+  factory improve [list|show|approve|reject|apply|revert] [id]   The improvement backlog
   factory upgrade [--dir <dir>] [--dry-run]      Merge current template changes into an existing project
   factory doctor                                 Check required tools
 
@@ -57,6 +63,8 @@ run options
   --run-id <id>           Use a specific run id (used by the dashboard)
   --pause-after <stage>   Stop after this stage passes, saving the run as paused (e.g. spec)
   --resume <run-id>       Resume a paused run from its next stage (no --spec/--request needed)
+  --proposal <id>         Record that this run applies an improvement proposal (used by the dashboard)
+  --no-improve            Skip the after-run Steward pass (factory.json improvement.afterRun)
 
 upgrade options
   --dir <path>            Project to upgrade (default .)
@@ -78,7 +86,7 @@ dashboard options
   --allow-host <h[:port]> Also accept this Host/Origin, e.g. your Tailscale name or IP.
                           Repeatable; required when --host is not loopback
                           (env FACTORY_DASHBOARD_ALLOW_HOST, comma-separated)
-`;
+${IMPROVE_HELP}`;
 
 function fail(msg) {
   process.stderr.write(`${color.red('error')} ${msg}\n`);
@@ -173,8 +181,11 @@ async function cmdRun(argv) {
       'run-id': { type: 'string' },
       'pause-after': { type: 'string' },
       resume: { type: 'string' },
+      proposal: { type: 'string' },
+      'no-improve': { type: 'boolean' },
     },
   });
+  if (values.proposal && !PROPOSAL_ID_RE.test(values.proposal)) fail('invalid --proposal id');
   const request = values.spec ? await fs.readFile(values.spec, 'utf8') : values.request;
   if (!values.resume && !request?.trim()) fail('provide --spec <file> or --request "<text>" (or --resume <run-id>)');
   if (values['run-id'] && !RUN_ID_RE.test(values['run-id'])) fail('invalid --run-id');
@@ -209,7 +220,13 @@ async function cmdRun(argv) {
   };
   process.on('SIGINT', onSignal);
   process.on('SIGTERM', onSignal);
+  const project = await loadProject(path.resolve(values.dir));
+  const afterRun = values['no-improve']
+    ? null
+    : afterRunHook({ dir: path.resolve(values.dir), executor, config: project.config });
   const state = await runPipeline({
+    afterRun,
+    proposalId: values.proposal ?? null,
     dir: values.dir,
     signal: abort.signal,
     request,
@@ -241,6 +258,25 @@ async function cmdRun(argv) {
       `  cost $${state.costUsd.toFixed(2)}${state.branch ? `  branch ${state.branch}` : ''}${state.prUrl ? `\nPR: ${state.prUrl}` : ''}\n` +
       `Artifacts: ${state.artifactDir}/   Logs: .factory/runs/${state.id}/\n`,
   );
+  // Auto mode: apply at most one auto-approved proposal after an ordinary run. A run that
+  // itself applied a proposal never chains another, so the loop cannot run away.
+  const { improvement } = resolveConfig(project.config);
+  if (afterRun && improvement.approval.mode === 'auto' && !state.proposalId && !abort.signal.aborted) {
+    const next = (await listProposals(path.resolve(values.dir))).find(
+      (p) => p.status === 'approved' && p.approval?.by === 'auto',
+    );
+    if (next) {
+      process.stdout.write(`\n${color.dim('•')} Auto mode: applying ${next.id} — ${next.title}\n`);
+      const applied = await applyInline({
+        dir: path.resolve(values.dir),
+        id: next.id,
+        executor,
+        ship: Boolean(values.ship),
+        onEvent: printProgress,
+      });
+      process.stdout.write(`${next.id}: run ${applied?.id} ${applied?.status}\n`);
+    }
+  }
   if (process.env.GITHUB_OUTPUT) {
     await fs.appendFile(
       process.env.GITHUB_OUTPUT,
@@ -508,6 +544,10 @@ export async function main(argv) {
         return await cmdUpgrade(rest);
       case 'dashboard':
         return await cmdDashboard(rest);
+      case 'steward':
+        return await cmdSteward(rest);
+      case 'improve':
+        return await cmdImprove(rest);
       case 'doctor':
         return await cmdDoctor();
       case '--version':

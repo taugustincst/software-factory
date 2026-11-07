@@ -102,3 +102,13 @@ Skills handle complex, multi-step workflows extracted from agents. They are chec
 2. If a trigger matches, the skill is invoked via the **Skill tool** — not the Agent tool
 3. If no skill matches, the dispatcher falls through to agent routing
 4. Skills can produce `### Suggested next agent` output, which the dispatcher handles using the same chaining rules as agents
+
+## Factory roles (embedded)
+
+These roles ship inside the factory: their definitions are here, their stages are in the pipeline and `src/improve/`, and their configuration is in `factory.json`. Each one works through the factory harness, scoped to its role.
+
+| Name             | Role                         | Capabilities                                                                                                           | Input                              | Output                                                       | Status |
+| ---------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------ | ------ |
+| factory-improver | Self-improvement: generative | Drafts evidence-cited improvement proposals from run evidence. Writes only under `.factory/improvements/`.             | Evidence pack, run records         | proposals.json (validated by the citation gate)              | active |
+| factory-decider  | Self-improvement: decision   | Judges, ranks and dedupes proposals; recommends approve, reject or needs-evidence. Read-only; advises, never approves. | Validated proposals, evidence pack | Decisions JSON                                               | active |
+| factory-steward  | Improvement & efficiency     | Owns the backlog and the efficiency mandate; produces the digest; applies changes only via the approval regime.        | Run store, backlog, evidence       | Ranked backlog, retirements, improvement & efficiency digest | active |

@@ -16,6 +16,7 @@ const PIPELINE_CREW = [
   'security-auditor',
   'release-manager',
 ];
+const FACTORY_ROLES = ['factory-improver', 'factory-decider', 'factory-steward'];
 const KNOWLEDGE_CREW = ['architect', 'scribe', 'sorter', 'seeker', 'connector', 'librarian', 'transcriber', 'postman'];
 const KNOWLEDGE_SKILLS = [
   'contact-sync',
@@ -43,7 +44,10 @@ const frontmatter = (file) => {
 
 test('the merged harness: both crews present, every agent has a name and a tool allow-list', async () => {
   const files = (await fs.readdir(path.join(CLAUDE_DIR, 'agents'))).filter((f) => f.endsWith('.md'));
-  assert.deepEqual(files.map((f) => f.replace(/\.md$/, '')).sort(), [...PIPELINE_CREW, ...KNOWLEDGE_CREW].sort());
+  assert.deepEqual(
+    files.map((f) => f.replace(/\.md$/, '')).sort(),
+    [...PIPELINE_CREW, ...KNOWLEDGE_CREW, ...FACTORY_ROLES].sort(),
+  );
   for (const f of files) {
     const fm = frontmatter(path.join(CLAUDE_DIR, 'agents', f));
     assert.match(fm, new RegExp(`^name: ${f.replace(/\.md$/, '')}$`, 'm'), `${f} names itself`);
@@ -60,7 +64,7 @@ test('the dispatcher routes skills-first, caps chains at 3, and the registry lis
   assert.match(dispatcher, /Max depth 3/);
   assert.match(dispatcher, /### Suggested next agent/);
   const registry = readFileSync(path.join(CLAUDE_DIR, 'references', 'agents-registry.md'), 'utf8');
-  for (const name of [...PIPELINE_CREW, ...KNOWLEDGE_CREW]) {
+  for (const name of [...PIPELINE_CREW, ...KNOWLEDGE_CREW, ...FACTORY_ROLES]) {
     assert.match(registry, new RegExp(`\\|\\s*${name}\\s*\\|`), `registry lists ${name}`);
   }
 });
