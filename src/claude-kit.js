@@ -91,10 +91,14 @@ export async function installClaudeKit(targetDir, { force = false, projectName }
   // Pin the embedded roles to this factory version. The pin describes the kit copy that was
   // installed; `factory upgrade` brings a newer one through its normal three-way merge.
   const pinFile = path.join(targetDir, ROLES_PIN);
-  if (!existsSync(pinFile) || force) {
-    await fs.writeFile(pinFile, `${JSON.stringify(rolesPin(), null, 2)}\n`);
+  // One atomic call: 'wx' creates only if absent, so there is no check-then-write window.
+  try {
+    await fs.writeFile(pinFile, `${JSON.stringify(rolesPin(), null, 2)}\n`, { flag: force ? 'w' : 'wx' });
     result.written.push(ROLES_PIN);
-  } else result.skipped.push(ROLES_PIN);
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    result.skipped.push(ROLES_PIN);
+  }
 
   const claudeMd = path.join(targetDir, 'CLAUDE.md');
   if (!existsSync(claudeMd)) {
