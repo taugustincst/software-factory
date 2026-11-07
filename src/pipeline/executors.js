@@ -72,9 +72,10 @@ export function guardSettings() {
 export async function harnessArgs(dir, stage, cfg) {
   const base = path.join(dir, '.factory', 'harness');
   await fs.mkdir(base, { recursive: true });
-  const serverCfg = path.join(base, `${stage.id}.json`);
+  const tag = cfg.depth ? `${stage.id}-d${cfg.depth}-${process.pid}-${Date.now().toString(36)}` : stage.id;
+  const serverCfg = path.join(base, `${tag}.json`);
   await fs.writeFile(serverCfg, JSON.stringify(cfg, null, 2));
-  const mcpFile = path.join(base, `${stage.id}.mcp.json`);
+  const mcpFile = path.join(base, `${tag}.mcp.json`);
   await fs.writeFile(
     mcpFile,
     JSON.stringify(

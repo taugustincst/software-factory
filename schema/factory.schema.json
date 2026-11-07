@@ -121,6 +121,21 @@
             "pattern": "^[a-z][a-z0-9-]{0,39}$"
           },
           "description": "factory.json command names run_command may run."
+        },
+        "only": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z]+$"
+              }
+            }
+          ],
+          "description": "Harness-only stages: true for every agent stage, or a list of stage ids. Those stages get only the factory's scoped tools (Claude Code's built-in tools are dropped)."
         }
       },
       "additionalProperties": false
@@ -284,6 +299,21 @@
           "type": "boolean",
           "description": "A retry after a failed gate starts one step further down the chain."
         }
+      },
+      "additionalProperties": false
+    },
+    "dashboard": {
+      "type": "object",
+      "description": "Dashboard settings.",
+      "properties": {
+        "tokenEnv": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+          "description": "Environment variable holding the optional login token (default FACTORY_DASHBOARD_TOKEN). The token itself never goes in this file."
+        }
+      },
+      "not": {
+        "required": ["token"]
       },
       "additionalProperties": false
     }
