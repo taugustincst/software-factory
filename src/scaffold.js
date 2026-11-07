@@ -3,6 +3,7 @@ import path from 'node:path';
 import { TEMPLATES_DIR, run } from './util.js';
 import { installClaudeKit } from './claude-kit.js';
 import { DEFAULTS as FACTORY_DEFAULTS } from './improve/config.js';
+import { DEFAULT_RUBRIC as INSPECTOR_RUBRIC } from './inspect/index.js';
 import { writeBaseSnapshot } from './upgrade-base.js';
 
 const TOKEN = /\{\{factory\.([a-zA-Z][\w]*)\}\}/g;
@@ -129,6 +130,7 @@ export async function scaffold({
     // The embedded roles' settings, written out so they are visible and tunable from day one.
     models: { ...FACTORY_DEFAULTS.models },
     improvement: structuredClone(FACTORY_DEFAULTS.improvement),
+    inspector: { rubric: { ...INSPECTOR_RUBRIC }, coverageDropMax: 1, analyze: true },
   };
   await fs.writeFile(path.join(target, 'factory.json'), `${JSON.stringify(factoryJson, null, 2)}\n`);
 

@@ -262,7 +262,8 @@
       .s-cancelled {
         color: var(--warn);
       }
-      .s-paused {
+      .s-paused,
+      .s-held {
         color: var(--warn);
       }
       .meta {
@@ -678,7 +679,7 @@
       /* Tablet: room for the full six-station line. */
       @media (min-width: 600px) {
         .line {
-          grid-template-columns: repeat(6, minmax(0, 1fr));
+          grid-template-columns: repeat(var(--stations, 7), minmax(0, 1fr));
         }
         .line::before {
           display: block;
@@ -834,7 +835,7 @@
           return n;
         };
         const DOT = { passed: '●', failed: '✗', running: '◐', pending: '○' };
-        const ICON = { spec: 'S', plan: 'P', build: 'B', test: 'T', review: 'R', ship: '⇪' };
+        const ICON = { spec: 'S', plan: 'P', build: 'B', test: 'T', review: 'R', inspect: 'I', ship: '⇪' };
         const state = { runs: [], selected: null, run: null, stage: null, attempt: null, logFor: null };
         // Phones show the run list and a run as separate screens; desktop ignores this.
         const setView = (v) => {
@@ -934,7 +935,7 @@
 
           const line = el(
             'div',
-            { class: 'line', role: 'group', 'aria-label': 'Pipeline stages' },
+            { class: 'line', role: 'group', 'aria-label': 'Pipeline stages', style: `--stations:${run.stages.length}` },
             run.stages.map((s) =>
               el(
                 'button',

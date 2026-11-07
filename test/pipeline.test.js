@@ -22,8 +22,9 @@ test('happy path: every stage passes and the change is committed on a feature br
   assert.equal(state.status, 'passed', state.error);
   assert.deepEqual(
     state.stages.map((s) => s.status),
-    ['passed', 'passed', 'passed', 'passed', 'passed', 'passed'],
+    ['passed', 'passed', 'passed', 'passed', 'passed', 'passed', 'passed'],
   );
+  assert.equal(state.inspection.verdict, 'ship');
   assert.match(state.branch, /^factory\/add-csv-export-[a-f0-9]{4}$/);
   assert.equal(git('rev-parse', '--abbrev-ref', 'HEAD').trim(), state.branch);
   assert.match(git('log', '-1', '--format=%s'), /^feat: add CSV export/);
@@ -243,7 +244,7 @@ test('a run under its spend cap passes, and a disabled cap never stops a run', a
     maxRunUsd: 15,
   });
   assert.equal(okState.status, 'passed', okState.error);
-  assert.equal(okState.costUsd, 5, 'five agent stages at $1 each');
+  assert.equal(okState.costUsd, 6, 'five agent stages and the model Inspector at $1 each');
 
   const off = fixtureRepo();
   const offState = await runPipeline({
@@ -253,7 +254,7 @@ test('a run under its spend cap passes, and a disabled cap never stops a run', a
     maxRunUsd: null,
   });
   assert.equal(offState.status, 'passed', offState.error);
-  assert.equal(offState.costUsd, 500);
+  assert.equal(offState.costUsd, 600);
   assert.equal(offState.maxRunUsd, null);
 });
 test('a run can be cancelled: state saved as cancelled and the lock released', async () => {
@@ -304,7 +305,7 @@ test('--pause-after stops with a resumable paused state; --resume finishes the s
   assert.equal(paused.pausedAfter, 'spec');
   assert.deepEqual(
     paused.stages.map((s) => s.status),
-    ['passed', 'pending', 'pending', 'pending', 'pending', 'pending'],
+    ['passed', 'pending', 'pending', 'pending', 'pending', 'pending', 'pending'],
   );
   assert.ok(existsSync(path.join(dir, paused.artifactDir, 'SPEC.md')), 'the spec artifact is on disk');
 

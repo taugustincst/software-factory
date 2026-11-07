@@ -7,6 +7,9 @@ import { gates, gatePassed, describeFailures, snapshot, VERDICT_RE } from './gat
 import { newRunId, saveRun, appendLog, readRun } from './store.js';
 import { acquireRunLock } from './lock.js';
 import { createHarness, summarizeAudit, STAGE_ROLES, DEFAULT_EXEC } from '../harness/index.js';
+import { inspect, asChecks, resolveInspector, parseModelReview, INSPECT_STAGE } from '../inspect/index.js';
+import { listRuns } from './store.js';
+import { appendAudit } from '../improve/store.js';
 
 export { RunLockError, liveRunLock, readRunLock } from './lock.js';
 
@@ -252,6 +255,30 @@ async function runPipelineLocked({
       await save(`Stage ${stage.id} started`);
       const attempt = { n: sState.attempts.length + 1, startedAt: now(), log: `${stage.id}-${sState.attempts.length + 1}.log` };
       sState.attempts.push(attempt);
+      if (stage.id === 'inspect') {
+        const r = await inspectStage({ ctx, state, project, executor, logName: attempt.log, attempt, commandTimeoutMs });
+        Object.assign(attempt, {
+          finishedAt: now(),
+          ok: r.verdict !== 'hold',
+          gate: r.checks,
+          summary: `Inspector verdict: ${r.verdict}`,
+        });
+        sState.status = attempt.ok ? 'passed' : 'failed';
+        await save(`Inspector verdict: ${r.verdict}`);
+        if (!attempt.ok) {
+          const why = r.findings
+            .filter((f) => !f.ok && f.level === 'hold')
+            .map((f) => f.check)
+            .join(', ');
+          return finish(
+            'held',
+            `Inspector hold (${why}); ship past it only with: factory ship --run-id ${state.id} --override-hold "<reason>"`,
+          );
+        }
+        if (pauseAfter === stage.id && i < stages.length - 1) return finishPaused(stage.id);
+        i++;
+        continue;
+      }
       const result = await shipStage({ ctx, state, ship, commit, issue, logName: attempt.log });
       Object.assign(attempt, { finishedAt: now(), ok: gatePassed(result.checks), gate: result.checks, summary: result.summary });
       sState.status = attempt.ok ? 'passed' : 'failed';
@@ -384,6 +411,92 @@ async function runPipelineLocked({
   return finish('passed');
 }
 
+/**
+ * The Inspector stage: deterministic re-verification through an inspector-scoped harness,
+ * then (unless disabled) the model Inspector's judgment. The model can add a hold; it can
+ * never clear a deterministic one.
+ */
+async function inspectStage({ ctx, state, project, executor, logName, attempt, commandTimeoutMs }) {
+  const settings = resolveInspector(project.config);
+  const harnessConfig = {
+    root: ctx.dir,
+    role: 'inspector',
+    artifactDir: ctx.rel(ctx.artifactDir),
+    commands: project.commands,
+    exec: project.config?.harness?.exec ?? DEFAULT_EXEC,
+    auditFile: path.join(ctx.dir, '.factory', 'runs', state.id, 'harness.jsonl'),
+    commandTimeoutMs,
+  };
+  const harness = createHarness(harnessConfig);
+  const before = summarizeAudit(harnessConfig.auditFile);
+  const previous = (await listRuns(ctx.dir)).find((r) => r.id !== state.id && typeof r.inspection?.coverage === 'number');
+  const result = await inspect({
+    ctx: { ...ctx, harness },
+    run: state,
+    project,
+    settings,
+    previousCoverage: previous?.inspection.coverage ?? null,
+  });
+  const notes = [];
+  const capped = state.maxRunUsd !== null && state.costUsd >= state.maxRunUsd;
+  if (capped && settings.analyze && settings.rubric['model-review'] !== 'off')
+    result.findings.push({
+      check: 'model-review',
+      level: 'note',
+      ok: false,
+      detail: `skipped: run spend cap reached ($${state.costUsd.toFixed(2)})`,
+    });
+  else if (settings.analyze && settings.rubric['model-review'] !== 'off' && typeof executor?.run === 'function') {
+    const stage = { ...INSPECT_STAGE };
+    const prompt = stage.prompt(ctx, result.findings);
+    await appendLog(ctx.dir, state.id, logName, `# inspector prompt\n${prompt}\n\n# inspector output\n`);
+    try {
+      const r = await executor.run({
+        stage,
+        prompt,
+        dir: ctx.dir,
+        ctx: { ...ctx, harness, harnessConfig },
+        onData: (d) => appendLog(ctx.dir, state.id, logName, d).catch(() => {}),
+      });
+      state.costUsd += r.costUsd ?? 0;
+      attempt.costUsd = r.costUsd ?? 0;
+      const review = parseModelReview(r.summary);
+      const level = settings.rubric['model-review'];
+      if (!review)
+        result.findings.push({
+          check: 'model-review',
+          level: 'note',
+          ok: false,
+          detail: 'the model Inspector gave no usable verdict',
+        });
+      else {
+        notes.push(...review.notes);
+        result.findings.push({
+          check: 'model-review',
+          level,
+          ok: review.verdict !== 'hold',
+          detail: `${review.verdict}${review.notes.length ? `: ${review.notes.join(' · ')}` : ''}`,
+        });
+      }
+    } catch (err) {
+      result.findings.push({ check: 'model-review', level: 'note', ok: false, detail: `model Inspector failed: ${err.message}` });
+    }
+  }
+  // Recompute: a model hold counts; nothing the model says can clear a deterministic hold.
+  const { verdictOf } = await import('../inspect/index.js');
+  const verdict = verdictOf(result.findings);
+  const after = summarizeAudit(harnessConfig.auditFile);
+  attempt.harness = { role: 'inspector', calls: after.calls - before.calls, refused: after.refused - before.refused };
+  state.inspection = { verdict, findings: result.findings, coverage: result.coverage, notes, at: now(), rubric: settings.rubric };
+  await appendLog(
+    ctx.dir,
+    state.id,
+    logName,
+    `\n# inspector verdict: ${verdict}\n${result.findings.map((f) => `${f.ok ? 'OK  ' : 'FAIL'} ${f.check} [${f.level}] ${String(f.detail).split('\n')[0]}`).join('\n')}\n`,
+  );
+  return { verdict, findings: result.findings, checks: asChecks(result.findings) };
+}
+
 function prBody(ctx, state, spec, review, issue) {
   const section = (md, h) =>
     md.match(new RegExp(`^##\\s+${h}[^\\n]*\\n([\\s\\S]*?)(?=^##\\s|(?![\\s\\S]))`, 'im'))?.[1]?.trim() ?? '';
@@ -405,7 +518,10 @@ function prBody(ctx, state, spec, review, issue) {
     `|---|---|---|---|`,
     ...gateRows,
     ``,
-    `Review verdict: ${review.match(VERDICT_RE)?.[1] ?? 'n/a'} · review loops: ${state.reviewLoops} · agent cost: $${state.costUsd.toFixed(2)}`,
+    `Review verdict: ${review.match(VERDICT_RE)?.[1] ?? 'n/a'} · Inspector: ${state.inspection?.verdict ?? 'n/a'}${state.inspection?.override ? ` (hold overridden by ${state.inspection.override.by}: ${state.inspection.override.reason})` : ''} · review loops: ${state.reviewLoops} · agent cost: $${state.costUsd.toFixed(2)}`,
+    ...(state.inspection?.findings ?? [])
+      .filter((f) => !f.ok)
+      .map((f) => `- Inspector ${f.level}: ${f.check} — ${String(f.detail).split('\n')[0]}`),
     ``,
     `Spec, plan and review: \`${state.artifactDir}/\``,
     issue ? `\nCloses #${issue}` : '',
@@ -489,10 +605,29 @@ async function shipStage({ ctx, state, ship, commit, issue, logName }) {
  * Ship a run that already passed review (e.g. `factory run --no-commit` in a read-only CI job,
  * then `factory ship` in a separate job that holds the write token).
  */
-export async function shipRun({ dir, runId, issue = null, push = true, onEvent = () => {} }) {
+export async function shipRun({ dir, runId, issue = null, push = true, overrideHold = null, by = 'human', onEvent = () => {} }) {
   dir = path.resolve(dir);
   const state = await readRun(dir, runId);
   if (!state) throw new Error(`run ${runId} not found in ${dir}/.factory/runs`);
+  // A held run ships only past an explicit, reasoned, audited human override.
+  if (state.status === 'held') {
+    if (!overrideHold || String(overrideHold).trim().length < 5)
+      throw new Error(`run ${runId} is held by the Inspector; pass --override-hold "<reason>" to ship it anyway`);
+    if (by !== 'human') throw new Error('only a human can override an Inspector hold');
+    state.inspection = {
+      ...(state.inspection ?? {}),
+      override: { by, reason: String(overrideHold).trim().slice(0, 500), at: now() },
+    };
+    await appendAudit(dir, {
+      kind: 'inspector-override',
+      run: runId,
+      by,
+      reason: state.inspection.override.reason,
+      findings: (state.inspection.findings ?? []).filter((f) => !f.ok),
+    });
+    state.events.push({ at: now(), msg: `Inspector hold overridden by ${by}: ${state.inspection.override.reason}` });
+    state.status = 'passed';
+  }
   if (state.status !== 'passed') throw new Error(`run ${runId} has status "${state.status}"; only passed runs can ship`);
   const review = state.stages.find((s) => s.id === 'review');
   if (!review || review.status !== 'passed') throw new Error(`run ${runId} has no passed review stage`);

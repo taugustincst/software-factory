@@ -294,7 +294,8 @@ test('pipeline: mock runs write through the harness and record per-attempt count
   assert.deepEqual(byStage.build, { role: 'implementer', calls: 2, refused: 0 });
   assert.equal(byStage.review.role, 'reviewer');
   const audit = summarizeAudit(path.join(dir, '.factory', 'runs', state.id, 'harness.jsonl'));
-  assert.equal(audit.calls, 5, 'spec, plan, two build files, review');
+  assert.equal(audit.calls, 7, 'spec, plan, two build files, review, and the Inspector re-running lint and test');
+  assert.equal(state.stages.find((s) => s.id === 'inspect').attempts[0].harness.role, 'inspector');
   assert.equal(audit.refused, 0);
 });
 
