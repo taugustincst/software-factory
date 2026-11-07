@@ -84,6 +84,19 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
     process.exit(2);
   }
   const cfg = JSON.parse(readFileSync(process.argv[i + 1], 'utf8'));
-  const harness = createHarness(cfg);
+  // Sub-agents from a Claude Code stage run as their own harness-only `claude -p`.
+  let spawner = null;
+  if (cfg.spawn?.executor === 'claude') {
+    const [{ claudeExecutor }, { executorSpawner }] = await Promise.all([
+      import('../pipeline/executors.js'),
+      import('./spawn.js'),
+    ]);
+    spawner = executorSpawner({
+      executor: claudeExecutor({ bin: cfg.spawn.bin ?? 'claude', model: cfg.spawn.model }),
+      dir: cfg.root,
+      baseConfig: cfg,
+    });
+  }
+  const harness = createHarness({ ...cfg, spawner });
   await serve(harness, { info: { name: 'factory', version: cfg.version ?? '0' } });
 }
