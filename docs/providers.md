@@ -37,9 +37,14 @@ The `openai` type speaks the OpenAI-compatible chat-completions format. That cov
 ```
 
 - **A route** is `"<provider>"` or `"<provider>:<model>"`. The model may itself contain `:`, as in `ollama:llama3.1:8b`.
-- **Precedence:** `routing.stages.<stage>` first, then `routing.roles.<role>`, then `routing.default`.
+- **Precedence:** `routing.stages.<stage>` first, then `routing.roles.<role>`, then the role's **model family**, then `routing.default`.
+  - The generative family covers the roles that write: author, implementer, steward and the improver.
+  - The decision family covers the roles that judge: reviewer, inspector and the decider.
+
+  So `"roles": { "generative": [...], "decision": [...] }` routes the whole pipeline with two lines. A sub-agent (`implementer/sub`) follows its parent's family.
   - Stages: spec, plan, build, test, review, inspect, improve, decide.
   - Roles: author, implementer, reviewer, inspector, generative, decision.
+
 - **Fallback:** the first available route runs. A route is skipped when:
   - its key env var is unset;
   - the Claude Code CLI is missing;

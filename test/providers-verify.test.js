@@ -144,3 +144,26 @@ test('verifyProviders: routed and keyed providers, the needs list, and the exit 
   const all = await verifyProviders({ config: {}, env: {}, all: true, whichImpl: async () => null });
   assert.ok(all.results.length >= 8);
 });
+
+test('model families: routing.roles.generative / .decision cover the whole pipeline', async () => {
+  const { chainFor } = await import('../src/providers/config.js');
+  const { STAGES } = await import('../src/pipeline/stages.js');
+  const { STAGE_ROLES } = await import('../src/harness/index.js');
+  const { routing } = resolveProviders({
+    routing: {
+      default: ['claude'],
+      roles: { generative: ['openai:gpt-x', 'claude'], decision: ['anthropic:judge'], reviewer: ['claude'] },
+      stages: { test: ['mock'] },
+    },
+  });
+  const route = (id, role) =>
+    chainFor(routing, STAGES.find((s) => s.id === id) ?? { id }, role ?? STAGE_ROLES[id]).map((r) => r.route);
+  assert.deepEqual(route('spec'), ['openai:gpt-x', 'claude'], 'author → generative');
+  assert.deepEqual(route('build'), ['openai:gpt-x', 'claude'], 'implementer → generative');
+  assert.deepEqual(route('test'), ['mock'], 'a stage route wins');
+  assert.deepEqual(route('review'), ['claude'], 'an exact role route wins over the family');
+  assert.deepEqual(route('inspect'), ['anthropic:judge'], 'inspector → decision');
+  assert.deepEqual(route('decide'), ['anthropic:judge']);
+  assert.deepEqual(route('subagent', 'implementer/sub'), ['openai:gpt-x', 'claude'], 'a sub-agent follows its parent’s family');
+  assert.deepEqual(route('ship', 'shipper'), ['claude'], 'roles outside both families use the default');
+});
