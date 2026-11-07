@@ -147,7 +147,16 @@ Issue text reaches scripts only through environment variables, never `${{ }}` in
 
 ### Dashboard
 
-`factory dashboard` serves a local page showing every run, each stage's gate checks per attempt, live agent logs, events, cost, branch and PR link, plus a form to start new runs. A running run can be cancelled from its detail page (the CLI stops cooperatively, saves the run as `cancelled` and releases the repo lock; Ctrl-C or SIGTERM does the same for terminal runs), and the detail page also shows the launcher output for dashboard-started runs. It binds to 127.0.0.1 only, rejects foreign `Host` headers (DNS rebinding) and cross-origin POSTs (CSRF), and sends a strict CSP.
+`factory dashboard` serves a local page showing every run, each stage's gate checks per attempt, live agent logs, events, cost, branch and PR link, plus a form to start new runs. A running run can be cancelled from its detail page (the CLI stops cooperatively, saves the run as `cancelled` and releases the repo lock; Ctrl-C or SIGTERM does the same for terminal runs), and the detail page also shows the launcher output for dashboard-started runs. It binds to 127.0.0.1 by default, rejects foreign `Host` headers (DNS rebinding) and cross-origin POSTs (CSRF), and sends a strict CSP. The page is designed phone-first: run list and run detail are separate screens on a phone, and every control is a 44px touch target.
+
+**From your phone (Tailscale).** Network access is opt-in. Bind to the machine's Tailscale IP and allow the name you will type on the phone:
+
+```bash
+factory dashboard --dir . --host "$(tailscale ip -4)" --allow-host "$(tailscale ip -4)" --allow-host my-pc.tail1234.ts.net
+# then open http://my-pc.tail1234.ts.net:4545 on the phone
+```
+
+`FACTORY_DASHBOARD_HOST` and `FACTORY_DASHBOARD_ALLOW_HOST` (comma-separated) do the same. A non-loopback `--host` without `--allow-host` is refused. The dashboard has no login of its own, so anyone who can reach that address can start runs: keep it on the tailnet, never on a public network.
 
 ## Safety model
 
@@ -179,7 +188,7 @@ factory ship --run-id <id> [--issue <n>] [--no-push]
 factory runs [--dir]
 factory readiness [dir ...] [--json] [--fail-below <0-5>]
 factory outcomes [--dir] [--json]
-factory dashboard [--dir] [--port 4545]
+factory dashboard [--dir] [--port 4545] [--host <addr> --allow-host <name[:port]>]
 factory upgrade [--dir] [--dry-run]
 factory doctor
 ```

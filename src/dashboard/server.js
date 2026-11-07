@@ -39,16 +39,73 @@ async function readJson(req) {
   }
 }
 
+// A bare hostname, IPv4 address, or bracketed IPv6 address, optionally with :port.
+const HOST_RE =
+  /^(?:\[[0-9a-f:.]+\]|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*)(?::(\d{1,5}))?$/i;
+const BIND_RE = /^(?:[0-9a-f:.]+|[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?)$/i;
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
+
 /**
- * Local-only dashboard. Binds to 127.0.0.1, rejects foreign Host headers (DNS rebinding)
- * and cross-origin POSTs (CSRF), because starting a run executes agents in the repo.
+ * The Host headers (and Origins) the dashboard accepts. Always the two local names on
+ * `port`; plus each explicitly allowed host. An allowed host with no port gets `port`.
+ * Entries are lowercased because Host matching is case-insensitive.
  */
-export function createDashboard({ dir, port, spawnRun = defaultSpawnRun, signalRun = defaultSignalRun }) {
-  const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+export function resolveAllowedHosts(port, allowHosts = []) {
+  const set = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+  for (const raw of allowHosts) {
+    const h = String(raw).trim().toLowerCase();
+    const m = HOST_RE.exec(h);
+    if (!m) throw new Error(`--allow-host "${raw}" is not a host or host:port`);
+    if (m[1] !== undefined && (Number(m[1]) < 1 || Number(m[1]) > 65535))
+      throw new Error(`--allow-host "${raw}" has an invalid port`);
+    set.add(m[1] === undefined ? `${h}:${port}` : h);
+  }
+  return set;
+}
+
+/**
+ * Resolve the bind address and extra allowed hosts from CLI flags, falling back to
+ * FACTORY_DASHBOARD_HOST / FACTORY_DASHBOARD_ALLOW_HOST (comma-separated). Flags win.
+ */
+export function dashboardNetwork({ host, allowHost } = {}, env = {}) {
+  const list = allowHost?.length ? allowHost : [env.FACTORY_DASHBOARD_ALLOW_HOST ?? ''];
+  return {
+    host: host ?? (env.FACTORY_DASHBOARD_HOST || '127.0.0.1'),
+    allowHosts: list
+      .flatMap((h) => String(h).split(','))
+      .map((h) => h.trim())
+      .filter(Boolean),
+  };
+}
+
+/**
+ * Validate the bind address. Loopback needs nothing else; any other address needs at
+ * least one --allow-host, so exposing the server is always a deliberate, named choice.
+ */
+export function checkBindHost(host, allowHosts = []) {
+  if (!BIND_RE.test(host)) throw new Error(`--host "${host}" is not an address`);
+  if (!LOOPBACK.has(host.toLowerCase()) && allowHosts.length === 0)
+    throw new Error(`--host ${host} is not loopback: also pass --allow-host <name[:port]> for the address you will open`);
+}
+
+/**
+ * Dashboard server. By default it binds to 127.0.0.1 and is local-only. It rejects
+ * Host headers outside the allow list (DNS rebinding) and cross-origin POSTs (CSRF),
+ * because starting a run executes agents in the repo. `allowHosts` opts specific
+ * extra names in (e.g. a Tailscale address); the same checks apply to them.
+ */
+export function createDashboard({ dir, port, allowHosts = [], spawnRun = defaultSpawnRun, signalRun = defaultSignalRun }) {
+  const allowedHosts = resolveAllowedHosts(port, allowHosts);
+  const hostAllowed = (h) => allowedHosts.has(String(h ?? '').toLowerCase());
+  const originAllowed = (o) => {
+    if (!o) return false;
+    const m = /^https?:\/\/([^/]+)$/i.exec(o);
+    return m !== null && hostAllowed(m[1]);
+  };
 
   return http.createServer(async (req, res) => {
     try {
-      if (!allowedHosts.has(req.headers.host ?? '')) return send(res, 421, { error: 'unexpected Host header' });
+      if (!hostAllowed(req.headers.host)) return send(res, 421, { error: 'unexpected Host header' });
       const url = new URL(req.url, `http://${req.headers.host}`);
       const parts = url.pathname.split('/').filter(Boolean);
 
@@ -80,8 +137,7 @@ export function createDashboard({ dir, port, spawnRun = defaultSpawnRun, signalR
       }
       if (req.method === 'POST' && url.pathname === '/api/runs') {
         const origin = req.headers.origin;
-        if (!origin || !allowedHosts.has(origin.replace(/^https?:\/\//, '')))
-          return send(res, 403, { error: 'cross-origin request refused' });
+        if (!originAllowed(origin)) return send(res, 403, { error: 'cross-origin request refused' });
         if (!/^application\/json\b/.test(req.headers['content-type'] ?? ''))
           return send(res, 415, { error: 'use application/json' });
         const body = await readJson(req);
@@ -103,8 +159,7 @@ export function createDashboard({ dir, port, spawnRun = defaultSpawnRun, signalR
       if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'runs' && parts[3] === 'cancel' && parts.length === 4) {
         if (!RUN_ID_RE.test(parts[2])) return send(res, 400, { error: 'bad run id' });
         const origin = req.headers.origin;
-        if (!origin || !allowedHosts.has(origin.replace(/^https?:\/\//, '')))
-          return send(res, 403, { error: 'cross-origin request refused' });
+        if (!originAllowed(origin)) return send(res, 403, { error: 'cross-origin request refused' });
         const result = await signalRun({ dir, id: parts[2] });
         return send(res, result.status, result.body);
       }
@@ -160,10 +215,14 @@ function defaultSpawnRun({ dir, id, request, executor, ship }) {
   closeSync(out);
 }
 
-export function startDashboard({ dir, port = 4545, ...rest }) {
-  const server = createDashboard({ dir, port, ...rest });
+export async function startDashboard({ dir, port = 4545, host = '127.0.0.1', allowHosts = [], ...rest }) {
+  checkBindHost(host, allowHosts);
+  const server = createDashboard({ dir, port, allowHosts, ...rest });
+  const urlHost = host.includes(':') ? `[${host}]` : host;
   return new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, '127.0.0.1', () => resolve({ server, url: `http://127.0.0.1:${port}` }));
+    server.listen(port, host, () =>
+      resolve({ server, url: `http://${urlHost}:${port}`, allowedHosts: [...resolveAllowedHosts(port, allowHosts)] }),
+    );
   });
 }

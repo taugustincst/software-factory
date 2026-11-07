@@ -2,7 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1b1a18" media="(prefers-color-scheme: dark)" />
     <title>Factory Floor</title>
     <link
       rel="icon"
@@ -58,22 +60,32 @@
       * {
         box-sizing: border-box;
       }
+      html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
       body {
         margin: 0;
         background: var(--bg);
         color: var(--ink);
-        font: 14px/1.5 var(--sans);
+        font: 15px/1.5 var(--sans);
+        -webkit-tap-highlight-color: transparent;
       }
+      /* Phone first: one column, sticky header, 44px touch targets, 16px inputs. */
       header {
         display: flex;
         align-items: center;
-        gap: 16px;
-        padding: 14px 20px;
+        gap: 8px;
+        padding: 8px 12px;
+        padding-top: max(8px, env(safe-area-inset-top));
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
         border-bottom: 1px solid var(--line);
         background: var(--panel);
         position: sticky;
         top: 0;
         z-index: 2;
+        min-height: 60px;
       }
       .brand {
         font-weight: 700;
@@ -81,6 +93,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        white-space: nowrap;
       }
       .brand i {
         width: 12px;
@@ -90,12 +103,14 @@
         transform: rotate(45deg);
       }
       .proj {
+        display: none;
         color: var(--muted);
         font-family: var(--mono);
         font-size: 12px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        min-width: 0;
       }
       header .spacer {
         flex: 1;
@@ -105,9 +120,15 @@
         border: 1px solid var(--line);
         background: var(--chip);
         color: var(--ink);
-        padding: 7px 12px;
-        border-radius: 6px;
+        padding: 8px 14px;
+        border-radius: 8px;
         cursor: pointer;
+        min-height: 44px;
+        min-width: 44px;
+        touch-action: manipulation;
+      }
+      button:disabled {
+        opacity: 0.6;
       }
       button.primary {
         background: var(--accent);
@@ -118,24 +139,28 @@
       button:focus-visible,
       textarea:focus-visible,
       select:focus-visible,
+      input:focus-visible,
       .run-item:focus-visible,
       .station:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
       main {
-        display: grid;
-        grid-template-columns: 300px 1fr;
-        min-height: calc(100vh - 57px);
+        display: block;
       }
       aside {
-        min-height: calc(100vh - 57px);
-        border-right: 1px solid var(--line);
         background: var(--panel);
-        overflow: auto;
-        max-height: calc(100vh - 57px);
-        position: sticky;
-        top: 57px;
+      }
+      /* On a phone the list and the run are separate screens. */
+      body[data-view='run'] aside,
+      body[data-view='list'] .content {
+        display: none;
       }
       aside h2,
       section h2 {
@@ -146,15 +171,20 @@
         margin: 16px 16px 8px;
         font-weight: 600;
       }
+      section h2 {
+        margin: 24px 0 8px;
+      }
       .run-item {
         display: block;
         width: 100%;
+        min-height: 64px;
         text-align: left;
         border: 0;
         border-left: 3px solid transparent;
         border-radius: 0;
         background: transparent;
-        padding: 10px 16px;
+        padding: 12px 16px;
+        padding-left: max(16px, env(safe-area-inset-left));
         border-bottom: 1px solid var(--line);
       }
       .run-item[aria-current='true'] {
@@ -170,34 +200,43 @@
       }
       .run-item .m {
         font-family: var(--mono);
-        font-size: 11px;
+        font-size: 12px;
         color: var(--muted);
         display: flex;
-        gap: 8px;
+        flex-wrap: wrap;
+        gap: 4px 10px;
         align-items: center;
       }
       .dots {
         letter-spacing: 2px;
       }
       .content {
-        padding: 20px 24px 60px;
+        padding: 16px 12px calc(48px + env(safe-area-inset-bottom));
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
         min-width: 0;
       }
       .empty {
         color: var(--muted);
-        padding: 60px 0;
+        padding: 48px 16px;
         text-align: center;
       }
       .run-head {
         display: flex;
         flex-wrap: wrap;
-        align-items: baseline;
-        gap: 12px;
-        margin-bottom: 4px;
+        align-items: center;
+        gap: 8px 12px;
+        margin-bottom: 8px;
       }
       .run-head h1 {
-        font-size: 22px;
+        font-size: 20px;
+        line-height: 1.25;
         margin: 0;
+        flex: 1 1 100%;
+        overflow-wrap: anywhere;
+      }
+      .run-head .cancel {
+        margin-left: auto;
       }
       .badge {
         font-family: var(--mono);
@@ -232,20 +271,25 @@
         color: var(--muted);
         display: flex;
         flex-wrap: wrap;
-        gap: 16px;
-        margin-bottom: 20px;
+        gap: 6px 14px;
+        margin-bottom: 16px;
+        overflow-wrap: anywhere;
       }
       .meta a {
         color: var(--accent);
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
       }
       .line {
         display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 0;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px 4px;
         position: relative;
-        margin: 8px 0 24px;
+        margin: 8px 0 20px;
       }
       .line::before {
+        display: none;
         content: '';
         position: absolute;
         left: 8%;
@@ -260,16 +304,16 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
         background: none;
         border: 0;
-        padding: 0 4px;
+        padding: 4px;
         cursor: pointer;
         color: var(--ink);
       }
       .node {
-        width: 58px;
-        height: 58px;
+        width: 52px;
+        height: 52px;
         border-radius: 12px;
         display: grid;
         place-items: center;
@@ -315,10 +359,11 @@
         font-size: 10px;
         color: var(--muted);
         text-align: center;
+        overflow-wrap: anywhere;
       }
       .grid2 {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+        grid-template-columns: minmax(0, 1fr);
         gap: 16px;
       }
       .card {
@@ -330,22 +375,24 @@
       }
       .card h3 {
         margin: 0;
-        padding: 10px 14px;
+        padding: 10px 12px;
         font-size: 13px;
         border-bottom: 1px solid var(--line);
         display: flex;
+        flex-wrap: wrap;
         justify-content: space-between;
         gap: 8px;
         align-items: center;
+        overflow-wrap: anywhere;
       }
       .tabs {
         display: flex;
-        gap: 4px;
+        gap: 6px;
         flex-wrap: wrap;
       }
       .tabs button {
-        padding: 2px 8px;
-        font-size: 11px;
+        padding: 4px 10px;
+        font-size: 12px;
         font-family: var(--mono);
       }
       .tabs button[aria-pressed='true'] {
@@ -358,10 +405,11 @@
         padding: 6px 0;
       }
       .checks li {
-        padding: 6px 14px;
+        padding: 8px 12px;
         display: grid;
         grid-template-columns: 22px 1fr;
         gap: 4px;
+        overflow-wrap: anywhere;
       }
       .checks .ic {
         font-family: var(--mono);
@@ -370,64 +418,82 @@
       .checks pre {
         grid-column: 2;
         margin: 4px 0 0;
-        font: 11px/1.45 var(--mono);
+        font: 12px/1.45 var(--mono);
         color: var(--muted);
         white-space: pre-wrap;
         word-break: break-word;
-        max-height: 160px;
+        max-height: 200px;
         overflow: auto;
+        overscroll-behavior: contain;
       }
       .summary {
-        padding: 10px 14px;
+        padding: 10px 12px;
         border-top: 1px solid var(--line);
-        font-size: 12px;
+        font-size: 13px;
         color: var(--muted);
         white-space: pre-wrap;
-        max-height: 180px;
+        overflow-wrap: anywhere;
+        max-height: 220px;
         overflow: auto;
+        overscroll-behavior: contain;
       }
+      /* Logs wrap instead of scrolling sideways, and their scroll never drags the page. */
       pre.log {
         margin: 0;
-        padding: 12px 14px;
-        font: 11.5px/1.5 var(--mono);
+        padding: 12px;
+        font: 12px/1.5 var(--mono);
         white-space: pre-wrap;
         word-break: break-word;
-        max-height: 520px;
+        max-height: 60vh;
+        max-height: 60dvh;
         overflow: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
         background: color-mix(in srgb, var(--bg) 60%, var(--panel));
       }
       .events {
         list-style: none;
         margin: 0;
-        padding: 8px 14px;
+        padding: 8px 12px;
         font-family: var(--mono);
-        font-size: 11.5px;
-        max-height: 220px;
+        font-size: 12px;
+        max-height: 260px;
         overflow: auto;
+        overscroll-behavior: contain;
       }
       .events li {
-        padding: 2px 0;
+        padding: 3px 0;
         color: var(--muted);
+        overflow-wrap: anywhere;
       }
       .events time {
         color: var(--ink);
         margin-right: 8px;
       }
+      /* The new-run form is a full-screen sheet on a phone, with actions at thumb height. */
       dialog {
-        border: 1px solid var(--line);
-        border-radius: 12px;
+        border: 0;
         background: var(--panel);
         color: var(--ink);
-        width: min(640px, calc(100vw - 32px));
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        max-height: 100%;
+        margin: 0;
         padding: 0;
+        border-radius: 0;
       }
       dialog::backdrop {
         background: rgb(0 0 0 / 0.45);
       }
       dialog form {
-        padding: 20px;
-        display: grid;
+        padding: 16px;
+        padding-top: max(16px, env(safe-area-inset-top));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+        display: flex;
+        flex-direction: column;
         gap: 14px;
+        min-height: 100%;
       }
       dialog h2 {
         margin: 0;
@@ -437,20 +503,31 @@
         display: grid;
         gap: 6px;
         font-weight: 600;
-        font-size: 13px;
+        font-size: 14px;
       }
       textarea,
       select {
-        font: 13px/1.5 var(--mono);
-        padding: 10px;
+        font: 16px/1.5 var(--mono);
+        padding: 12px;
         border: 1px solid var(--line);
         border-radius: 8px;
         background: var(--bg);
         color: var(--ink);
+        width: 100%;
+      }
+      select {
+        min-height: 48px;
       }
       textarea {
-        min-height: 200px;
+        min-height: 40vh;
         resize: vertical;
+        flex: 1;
+      }
+      input[type='checkbox'] {
+        width: 24px;
+        height: 24px;
+        margin: 0;
+        accent-color: var(--accent);
       }
       .row {
         display: flex;
@@ -458,58 +535,128 @@
         align-items: center;
         flex-wrap: wrap;
       }
-      .row label {
+      .row > label {
+        flex: 1 1 100%;
+      }
+      .row label.check {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 10px;
         font-weight: 500;
+        min-height: 44px;
+      }
+      .actions {
+        display: flex;
+        gap: 12px;
+        margin-top: auto;
+      }
+      .actions button {
+        flex: 1;
+        min-height: 48px;
       }
       .hint {
-        font-size: 12px;
+        font-size: 13px;
         color: var(--muted);
         margin: 0;
       }
       .err {
         color: var(--bad);
-        font-size: 13px;
+        font-size: 14px;
         min-height: 1em;
         margin: 0;
+        overflow-wrap: anywhere;
       }
-      @media (max-width: 860px) {
-        main {
-          grid-template-columns: 1fr;
-        }
-        aside {
-          position: static;
-          max-height: 260px;
-          border-right: 0;
-          border-bottom: 1px solid var(--line);
-        }
-        .grid2 {
-          grid-template-columns: 1fr;
-        }
-        .content {
-          padding: 16px;
-        }
+      /* Tablet: room for the full six-station line. */
+      @media (min-width: 600px) {
         .line {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          row-gap: 16px;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
         }
         .line::before {
-          display: none;
+          display: block;
+        }
+        .node {
+          width: 58px;
+          height: 58px;
+        }
+        .run-head h1 {
+          flex: 0 1 auto;
+          font-size: 22px;
+        }
+        dialog {
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          width: min(640px, calc(100vw - 32px));
+          height: auto;
+          max-height: calc(100vh - 32px);
+          margin: auto;
+        }
+        dialog form {
+          padding: 20px;
+          min-height: 0;
+        }
+        textarea {
+          min-height: 200px;
+        }
+        .row > label {
+          flex: 0 1 auto;
+        }
+        .actions {
+          justify-content: flex-end;
+          margin-top: 0;
+        }
+        .actions button {
+          flex: 0 0 auto;
+        }
+      }
+      /* Desktop: list and run side by side. */
+      @media (min-width: 860px) {
+        body {
+          font-size: 14px;
+        }
+        header {
+          gap: 16px;
+          padding: 10px 20px;
         }
         .proj {
+          display: block;
+        }
+        main {
+          display: grid;
+          grid-template-columns: 300px 1fr;
+          min-height: calc(100vh - 61px);
+        }
+        body[data-view] aside,
+        body[data-view] .content {
+          display: block;
+        }
+        aside {
+          border-right: 1px solid var(--line);
+          overflow: auto;
+          max-height: calc(100vh - 61px);
+          position: sticky;
+          top: 61px;
+        }
+        .back {
           display: none;
+        }
+        .content {
+          padding: 20px 24px 60px;
+        }
+        .grid2 {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+        }
+        pre.log {
+          max-height: 520px;
         }
       }
     </style>
   </head>
-  <body>
+  <body data-view="list">
     <header>
       <div class="brand"><i aria-hidden="true"></i>Factory Floor</div>
       <div class="proj" id="proj"></div>
       <div class="spacer"></div>
-      <button id="theme" type="button" aria-label="Toggle color theme" style="font-size: 16px; line-height: 1">◐</button>
+      <button id="theme" type="button" aria-label="Toggle color theme">◐</button>
       <button class="primary" id="newBtn" type="button">New run</button>
     </header>
     <main>
@@ -532,6 +679,7 @@
             required
             minlength="10"
             maxlength="20000"
+            enterkeyhint="enter"
             placeholder="# Add CSV export to the visits table&#10;&#10;Front-desk staff need to export today's visits as CSV for the billing team…"
           ></textarea>
         </label>
@@ -544,10 +692,10 @@
               <option value="mock">Mock (offline demo)</option>
             </select>
           </label>
-          <label><input type="checkbox" id="ship" /> Push and open a PR</label>
+          <label class="check"><input type="checkbox" id="ship" /> Push and open a PR</label>
         </div>
         <p class="err" id="formErr" role="alert"></p>
-        <div class="row" style="justify-content: flex-end">
+        <div class="actions">
           <button type="button" id="cancel">Cancel</button>
           <button class="primary" type="submit">Start run</button>
         </div>
@@ -570,6 +718,12 @@
         const DOT = { passed: '●', failed: '✗', running: '◐', pending: '○' };
         const ICON = { spec: 'S', plan: 'P', build: 'B', test: 'T', review: 'R', ship: '⇪' };
         const state = { runs: [], selected: null, run: null, stage: null, attempt: null, logFor: null };
+        // Phones show the run list and a run as separate screens; desktop ignores this.
+        const setView = (v) => {
+          if (document.body.dataset.view === v) return;
+          document.body.dataset.view = v;
+          window.scrollTo(0, 0);
+        };
 
         try {
           const t = localStorage.getItem('ff-theme');
@@ -622,6 +776,7 @@
                     state.selected = r.id;
                     state.stage = null;
                     state.attempt = null;
+                    setView('run');
                     refresh();
                   },
                 },
@@ -636,7 +791,7 @@
               ),
             ),
           );
-          if (!state.runs.length) box.replaceChildren(el('p', { class: 'hint', style: 'padding:0 16px' }, 'Nothing here yet.'));
+          if (!state.runs.length) box.replaceChildren(el('p', { class: 'hint empty' }, 'No runs yet. Tap New run to start one.'));
         }
 
         function currentStage(run) {
@@ -727,6 +882,7 @@
           const logPre = el('pre', { class: 'log', id: 'log' }, att ? 'Loading log…' : 'No attempts yet.');
           c.replaceChildren(
             ...[
+              el('button', { class: 'back', type: 'button', onclick: () => setView('list') }, '← Runs'),
               el(
                 'div',
                 { class: 'run-head' },
@@ -737,7 +893,7 @@
                       'button',
                       {
                         type: 'button',
-                        style: 'margin-left:auto',
+                        class: 'cancel',
                         onclick: async (ev) => {
                           ev.target.disabled = true;
                           ev.target.textContent = 'Cancelling…';
@@ -780,7 +936,7 @@
                     ? el('ul', { class: 'checks' }, checks)
                     : el(
                         'p',
-                        { class: 'hint', style: 'padding:12px 14px' },
+                        { class: 'hint', style: 'padding:12px' },
                         st.status === 'running' ? 'Agent working; gate runs when it finishes.' : 'Not run yet.',
                       ),
                   att?.summary ? el('div', { class: 'summary' }, att.summary) : null,
@@ -788,9 +944,9 @@
                 ),
                 el('div', { class: 'card' }, el('h3', {}, el('span', {}, att ? `Log · ${att.log}` : 'Log')), logPre),
               ),
-              el('h2', { style: 'margin:24px 0 8px' }, 'Launcher output'),
+              el('h2', {}, 'Launcher output'),
               el('div', { class: 'card' }, el('pre', { class: 'log', id: 'launcher-log' }, 'Loading…')),
-              el('h2', { style: 'margin:24px 0 8px' }, 'Events'),
+              el('h2', {}, 'Events'),
               el(
                 'div',
                 { class: 'card' },
@@ -853,7 +1009,8 @@
         $('#newBtn').onclick = () => {
           $('#formErr').textContent = '';
           dlg.showModal();
-          $('#req').focus();
+          // Focusing on open would pop the keyboard over the sheet on a phone.
+          if (matchMedia('(min-width: 600px)').matches) $('#req').focus();
         };
         $('#cancel').onclick = () => dlg.close();
         $('#form').addEventListener('submit', async (e) => {
@@ -869,6 +1026,7 @@
             state.selected = id;
             state.stage = null;
             state.attempt = null;
+            setView('run');
             setTimeout(refresh, 600);
           } catch (err) {
             $('#formErr').textContent = err.message;
