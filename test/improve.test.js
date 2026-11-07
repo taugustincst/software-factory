@@ -414,8 +414,8 @@ test('dashboard: improvements API lists the backlog; actions need same origin an
   await stewardPass({ dir, executor: mockExecutor(), analyze: true });
   const { startDashboard } = await import('../src/dashboard/server.js');
   const spawned = [];
-  const port = 40000 + Math.floor(Math.random() * 20000);
-  const { server, url } = await startDashboard({ dir, port, spawnRun: (a) => spawned.push(a) });
+  const { startOnFreePort } = await import('./helpers.js');
+  const { server, url } = await startOnFreePort(startDashboard, { dir, spawnRun: (a) => spawned.push(a) });
   try {
     const data = await (await fetch(`${url}/api/improvements`)).json();
     assert.equal(data.approval.mode, 'required');

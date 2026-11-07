@@ -7,12 +7,11 @@ import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import { runPipeline } from '../src/pipeline/runner.js';
 import { mockExecutor } from '../src/pipeline/executors.js';
-import { fixtureRepo } from './helpers.js';
+import { fixtureRepo, startOnFreePort } from './helpers.js';
 
 const { dir } = fixtureRepo();
 const spawned = [];
-const port = 40000 + Math.floor(Math.random() * 20000);
-const { server, url } = await startDashboard({ dir, port, spawnRun: (args) => spawned.push(args) });
+const { server, url, port } = await startOnFreePort(startDashboard, { dir, spawnRun: (args) => spawned.push(args) });
 after(() => server.close());
 
 const state = await runPipeline({
@@ -116,10 +115,8 @@ test('cancel refuses finished or unknown runs (default signaler)', async () => {
 
 test('cancel signals the run process through the injected signaler', async () => {
   const signalled = [];
-  const port2 = 40000 + Math.floor(Math.random() * 20000);
-  const dash = await startDashboard({
+  const dash = await startOnFreePort(startDashboard, {
     dir,
-    port: port2,
     spawnRun: () => {},
     signalRun: async ({ id }) => {
       signalled.push(id);
@@ -176,10 +173,10 @@ test('a non-loopback bind requires an explicit allow-host', async () => {
 });
 
 test('opt-in host: the named host gets reads and same-origin POSTs; others are still refused', async () => {
-  const p2 = 40000 + Math.floor(Math.random() * 20000);
   const got = [];
   const name = 'factory.tail1234.ts.net';
-  const dash = await startDashboard({ dir, port: p2, allowHosts: [name], spawnRun: (a) => got.push(a) });
+  const dash = await startOnFreePort(startDashboard, { dir, allowHosts: [name], spawnRun: (a) => got.push(a) });
+  const p2 = dash.port;
   try {
     assert.equal(await getStatus(p2, `${name}:${p2}`), 200);
     assert.equal(await getStatus(p2, `${name.toUpperCase()}:${p2}`), 200, 'Host matching is case-insensitive');

@@ -33,3 +33,21 @@ export function fixtureRepo({ commands } = {}) {
   git('commit', '-q', '-m', 'init');
   return { dir, git: (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' }) };
 }
+
+/**
+ * Start a dashboard on a random high port, retrying when the OS refuses it. Windows reserves
+ * port ranges (Hyper-V), so a random port can fail with EACCES; any port works for the test.
+ */
+export async function startOnFreePort(start, opts, tries = 8) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    const port = 40000 + Math.floor(Math.random() * 20000);
+    try {
+      return { ...(await start({ ...opts, port })), port };
+    } catch (err) {
+      if (!['EACCES', 'EADDRINUSE'].includes(err.code)) throw err;
+      last = err;
+    }
+  }
+  throw last;
+}
