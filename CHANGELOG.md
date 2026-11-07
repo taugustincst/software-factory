@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.4.0](https://github.com/taugustincst/software-factory/compare/v0.3.0...v0.4.0) (2026-11-07)
+
+
+### Features
+
+* **dashboard:** mobile-first UI and opt-in phone reachability ([47838e5](https://github.com/taugustincst/software-factory/commit/47838e58995d27f8420911801cf26e7f49c0047e))
+* **dashboard:** mobile-first UI and opt-in phone reachability ([e4caaee](https://github.com/taugustincst/software-factory/commit/e4caaee47421c6f0e32b6b5d0d99ecedf92b6980))
+* **harness:** factory tool harness + self-improvement design (A/3) ([74e7ef5](https://github.com/taugustincst/software-factory/commit/74e7ef52f10f0e204aeae21161e33d1dd7f947bf))
+* **harness:** the factory's own tool layer, plus the self-improvement design ([da7481d](https://github.com/taugustincst/software-factory/commit/da7481dbdbbbf03a83728f7f33ad2d9bfcb81ef8))
+* **improve:** self-improving factory, Phase 1 (B/3) ([277bb1c](https://github.com/taugustincst/software-factory/commit/277bb1c579c2ad44333f1da12de63bd37b13e291))
+* **improve:** the self-improving factory, Phase 1 ([6ab5cb6](https://github.com/taugustincst/software-factory/commit/6ab5cb6ba4264c7a1e4b6c36db6f034a591a8ac9))
+* **inspect:** the Inspector — release quality, hold and override (C/3) ([5925436](https://github.com/taugustincst/software-factory/commit/5925436f72b66ba1c18b19b1fd1c2e67051d8e33))
+* **inspect:** the Inspector, a model in charge of release quality ([3d64e7f](https://github.com/taugustincst/software-factory/commit/3d64e7f6241cec971af4ab2df987b9281fcac9d6))
+* **providers:** the factory can use other LLMs as needed ([845e10c](https://github.com/taugustincst/software-factory/commit/845e10cf2612eaa91c4a15c605666fc29153826a))
+* **providers:** use other LLMs per stage and role, with fallback (D) ([ed874e0](https://github.com/taugustincst/software-factory/commit/ed874e0fb74da84dfaa85933f0e310b26157b48d))
+* **readiness:** implement the Autonomy Maturity Model — readiness + outcomes, Level 4 floor ([#27](https://github.com/taugustincst/software-factory/issues/27)) ([2eb452a](https://github.com/taugustincst/software-factory/commit/2eb452a57a0e4a1963e47fabccb5cc47f8d1fe79))
+
+
+### Bug Fixes
+
+* **ci:** let the secret scan read pull requests in private repos ([#31](https://github.com/taugustincst/software-factory/issues/31)) ([eadfed6](https://github.com/taugustincst/software-factory/commit/eadfed6c5f68caf3570c3aaa90b97b5fb872268c))
+* **harness:** read through one file handle so the size check and read cannot race ([346ff1b](https://github.com/taugustincst/software-factory/commit/346ff1ba5ba3d5167849d73a20149e36aaa455f7))
+* **hooks:** restore executable bit on the pre-commit hooks ([38cdc87](https://github.com/taugustincst/software-factory/commit/38cdc87d50ecd3a0da5206299c9a25712f6cd0b6))
+* **hooks:** restore executable bit on the pre-commit hooks ([c5f330e](https://github.com/taugustincst/software-factory/commit/c5f330e3ef693fe7657bd5462243b6d26266317c))
+* **inspect:** group the migration pattern so its anchor applies as intended ([0a122fd](https://github.com/taugustincst/software-factory/commit/0a122fdaca62379954cb57cbe36c341059f9d92e))
+* **inspect:** read untracked files through one handle ([5eeb5b7](https://github.com/taugustincst/software-factory/commit/5eeb5b701a1cda90a66d08c4e18d7c93d5a9c3ac))
+* **kit:** create the roles pin atomically (no check-then-write) ([aad9cde](https://github.com/taugustincst/software-factory/commit/aad9cde70ae0a7a35bb644bab892122fddb81c3b))
+
 ## [0.3.0](https://github.com/taugustincst/software-factory/compare/v0.2.0...v0.3.0) (2026-10-22)
 
 
