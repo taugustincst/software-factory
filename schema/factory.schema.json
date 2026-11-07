@@ -121,6 +121,21 @@
             "pattern": "^[a-z][a-z0-9-]{0,39}$"
           },
           "description": "factory.json command names run_command may run."
+        },
+        "only": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z]+$"
+              }
+            }
+          ],
+          "description": "Harness-only stages: true for every agent stage, or a list of stage ids. Those stages get only the factory's scoped tools (Claude Code's built-in tools are dropped)."
         }
       },
       "additionalProperties": false
