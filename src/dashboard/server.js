@@ -6,6 +6,9 @@ import { ROOT } from '../util.js';
 import { listRuns, readRun, readLog, newRunId, RUN_ID_RE, LOG_NAME_RE } from '../pipeline/store.js';
 import { liveRunLock } from '../pipeline/lock.js';
 import { loadProject } from '../pipeline/project.js';
+import { resolveConfig } from '../improve/config.js';
+import { listProposals, readDigest, PROPOSAL_ID_RE } from '../improve/store.js';
+import { decideProposal, startApply, revertProposal } from '../improve/apply.js';
 
 const INDEX = path.join(ROOT, 'src', 'dashboard', 'index.html');
 const MAX_BODY = 64 * 1024;
@@ -135,6 +138,40 @@ export function createDashboard({ dir, port, allowHosts = [], spawnRun = default
         const text = await readLog(dir, parts[2], parts[4]);
         return text === null ? send(res, 404, { error: 'not found' }) : send(res, 200, text, 'text/plain; charset=utf-8');
       }
+      if (req.method === 'GET' && url.pathname === '/api/improvements') {
+        const p = await loadProject(dir);
+        const { improvement, warnings } = resolveConfig(p.config);
+        return send(res, 200, {
+          approval: improvement.approval,
+          afterRun: improvement.afterRun,
+          digest: await readDigest(dir),
+          proposals: await listProposals(dir),
+          warnings,
+        });
+      }
+      if (req.method === 'POST' && parts[0] === 'api' && parts[1] === 'improvements' && parts.length === 4) {
+        const [, , id, action] = parts;
+        if (!PROPOSAL_ID_RE.test(id)) return send(res, 400, { error: 'bad proposal id' });
+        if (!['approve', 'reject', 'apply', 'revert'].includes(action)) return send(res, 404, { error: 'not found' });
+        if (!originAllowed(req.headers.origin)) return send(res, 403, { error: 'cross-origin request refused' });
+        if (!/^application\/json\b/.test(req.headers['content-type'] ?? ''))
+          return send(res, 415, { error: 'use application/json' });
+        const body = await readJson(req);
+        const reason = typeof body.reason === 'string' ? body.reason.slice(0, 500) : '';
+        if (action === 'reject') return send(res, 200, await decideProposal(dir, id, { approve: false, by: 'human', reason }));
+        if (action === 'revert') return send(res, 200, await revertProposal(dir, id, { by: 'human' }));
+        // approve = Tj's approval, then start the run; apply = run an already-approved one.
+        const holder = await liveRunLock(dir);
+        if (holder) return send(res, 409, { error: `a factory run is already in progress: run ${holder.runId}` });
+        if (action === 'approve') await decideProposal(dir, id, { approve: true, by: 'human', reason });
+        const executor = body.executor === 'mock' ? 'mock' : 'claude';
+        const p = await startApply(dir, id, async ({ request, proposalId }) => {
+          const runId = newRunId();
+          spawnRun({ dir, id: runId, request, executor, ship: body.ship === true, proposalId });
+          return runId;
+        });
+        return send(res, 202, p);
+      }
       if (req.method === 'POST' && url.pathname === '/api/runs') {
         const origin = req.headers.origin;
         if (!originAllowed(origin)) return send(res, 403, { error: 'cross-origin request refused' });
@@ -189,7 +226,7 @@ async function defaultSignalRun({ dir, id }) {
   return { status: 202, body: { id, signalledPid: holder.pid } };
 }
 
-function defaultSpawnRun({ dir, id, request, executor, ship }) {
+function defaultSpawnRun({ dir, id, request, executor, ship, proposalId = null }) {
   // The request goes through a file, never argv: text starting with "-" would be read as a flag.
   const runFolder = path.join(dir, '.factory', 'runs', id);
   mkdirSync(runFolder, { recursive: true });
@@ -208,6 +245,7 @@ function defaultSpawnRun({ dir, id, request, executor, ship }) {
     id,
   ];
   if (ship) args.push('--ship');
+  if (proposalId) args.push('--proposal', proposalId);
   // Detached so a run survives the dashboard closing; launcher output is kept for debugging.
   const out = openSync(path.join(runFolder, 'launcher.txt'), 'a');
   const child = spawn(process.execPath, args, { cwd: dir, detached: true, stdio: ['ignore', out, out] });

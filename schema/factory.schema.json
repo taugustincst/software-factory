@@ -6,21 +6,124 @@
   "type": "object",
   "required": ["commands"],
   "properties": {
-    "$schema": { "type": "string" },
-    "name": { "type": "string" },
-    "template": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "template": {
+      "type": "string"
+    },
     "commands": {
       "type": "object",
       "required": ["test"],
       "properties": {
-        "install": { "type": "string", "description": "Install dependencies" },
-        "lint": { "type": "string", "description": "Lint and format check; must exit non-zero on problems" },
-        "typecheck": { "type": "string" },
-        "test": { "type": "string", "description": "Full test suite" },
-        "build": { "type": "string" },
-        "dev": { "type": "string", "description": "Local development server (not run by gates)" }
+        "install": {
+          "type": "string",
+          "description": "Install dependencies"
+        },
+        "lint": {
+          "type": "string",
+          "description": "Lint and format check; must exit non-zero on problems"
+        },
+        "typecheck": {
+          "type": "string"
+        },
+        "test": {
+          "type": "string",
+          "description": "Full test suite"
+        },
+        "build": {
+          "type": "string"
+        },
+        "dev": {
+          "type": "string",
+          "description": "Local development server (not run by gates)"
+        }
       },
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "models": {
+      "type": "object",
+      "description": "Models for the embedded roles (docs/self-improvement.md).",
+      "properties": {
+        "generative": {
+          "type": ["string", "null"],
+          "pattern": "^[\\w.:@/-]{1,100}$",
+          "description": "Generative model: drafts improvement proposals."
+        },
+        "decision": {
+          "type": ["string", "null"],
+          "pattern": "^[\\w.:@/-]{1,100}$",
+          "description": "Decision model: judges and ranks proposals; read-only."
+        }
+      },
+      "additionalProperties": false
+    },
+    "improvement": {
+      "type": "object",
+      "description": "The self-improvement loop (docs/self-improvement.md).",
+      "properties": {
+        "afterRun": {
+          "enum": ["evidence", "analyze", "off"],
+          "description": "After each run: deterministic Steward pass (default), with models, or nothing."
+        },
+        "recurrenceMin": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Runs a fact must appear in to count as a pattern."
+        },
+        "maxProposalsPerRun": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "staleAfterRuns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Retire a proposal whose evidence has not recurred in this many runs."
+        },
+        "maxUsdPerPass": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "approval": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": ["required", "auto"],
+              "description": "required (default): Tj approves every proposal. auto: the decision model may approve proposals at or below autoMaxRisk."
+            },
+            "autoMaxRisk": {
+              "enum": ["low", "medium"],
+              "description": "Highest computed risk auto mode may apply. Gates, security and release are always human."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "harness": {
+      "type": "object",
+      "description": "The factory tool harness (docs/harness.md).",
+      "properties": {
+        "exec": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,39}$"
+          },
+          "description": "factory.json command names run_command may run."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

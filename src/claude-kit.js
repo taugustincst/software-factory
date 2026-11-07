@@ -1,6 +1,25 @@
 import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
-import { KIT_DIR } from './util.js';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { KIT_DIR, ROOT } from './util.js';
+
+/** Roles that ship inside the factory; their install is pinned in .claude/factory-roles.json. */
+export const EMBEDDED_ROLES = ['factory-improver', 'factory-decider', 'factory-steward'];
+export const ROLES_PIN = path.join('.claude', 'factory-roles.json');
+
+/** The pin for the roles a given kit tree installs: factory version + content hash per role. */
+export function rolesPin(kitClaudeDir = path.join(KIT_DIR, '.claude')) {
+  const version = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+  const roles = {};
+  for (const name of EMBEDDED_ROLES) {
+    const file = path.join(kitClaudeDir, 'agents', `${name}.md`);
+    roles[name] = existsSync(file)
+      ? `sha256:${createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 16)}`
+      : null;
+  }
+  return { factoryVersion: version, roles };
+}
 
 const IMPORT_LINE = '@.claude/FACTORY.md';
 
@@ -68,6 +87,14 @@ export async function installClaudeKit(targetDir, { force = false, projectName }
     if (src.endsWith('.mjs')) await fs.chmod(dst, 0o755);
     result.written.push(relOut);
   }
+
+  // Pin the embedded roles to this factory version. The pin describes the kit copy that was
+  // installed; `factory upgrade` brings a newer one through its normal three-way merge.
+  const pinFile = path.join(targetDir, ROLES_PIN);
+  if (!existsSync(pinFile) || force) {
+    await fs.writeFile(pinFile, `${JSON.stringify(rolesPin(), null, 2)}\n`);
+    result.written.push(ROLES_PIN);
+  } else result.skipped.push(ROLES_PIN);
 
   const claudeMd = path.join(targetDir, 'CLAUDE.md');
   if (!existsSync(claudeMd)) {

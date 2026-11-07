@@ -1,6 +1,6 @@
 # Self-improvement: the factory that learns from its own runs
 
-Status: design, with Phase 1 implemented across three stacked PRs (see [Phasing](#phasing)).
+Status: design, with Phase 1 implemented across stacked PRs (see [Phasing](#phasing)). PR A (harness) and PR B (the improvement loop) are implemented. The Inspector (PR C) and multi-provider models (PR D, added by Tj on 2026-11-06: "make it so that the factory can grab other llms as needed") follow.
 Directed by Tj on 2026-11-06 ("I want the factory to be self improving"). That directive came with six amendments:
 
 1. Build an LLM into the loop.

@@ -158,6 +158,29 @@ factory dashboard --dir . --host "$(tailscale ip -4)" --allow-host "$(tailscale 
 
 `FACTORY_DASHBOARD_HOST` and `FACTORY_DASHBOARD_ALLOW_HOST` (comma-separated) do the same. A non-loopback `--host` without `--allow-host` is refused. The dashboard has no login of its own, so anyone who can reach that address can start runs: keep it on the tailnet, never on a public network.
 
+### Self-improvement (Steward)
+
+The factory learns from its own runs:
+
+1. A deterministic **evidence layer** turns the run store into facts (gate failures, retries, retry cost, review loops, cost per passed run, harness refusals), and spots patterns that recur across runs.
+2. A **generative model** drafts improvement proposals.
+3. A **citation gate** in code rejects any claim that does not cite a real fact with its exact value.
+4. A **decision model** ranks what survives.
+5. The **approval regime** decides what happens next:
+   - `required` (the default): you approve each proposal, in the dashboard's Improve screen or with `factory improve approve <id>`;
+   - `auto`: low-risk changes within `autoMaxRisk` apply themselves. Gates, security and release always wait for you.
+6. An approved proposal becomes an ordinary factory run, landing as its own commit. `factory improve revert <id>` undoes it.
+
+```bash
+factory steward                     # cross-run review: evidence → proposals → ranking → digest
+factory steward --no-analyze        # deterministic only, no model spend
+factory improve                     # the backlog, best first
+factory improve show <id>           # evidence, decision, history
+factory improve approve <id>        # then: factory improve apply <id>
+```
+
+A light, deterministic Steward pass runs after every `factory run` (`improvement.afterRun`). The roles (`factory-improver`, `factory-decider`, `factory-steward`) ship in the kit and are pinned in `.claude/factory-roles.json`. Their models and the approval mode live in `factory.json` (`models`, `improvement`). Design: [docs/self-improvement.md](docs/self-improvement.md). The agents work through the factory's own [tool harness](docs/harness.md).
+
 ## Safety model
 
 | Layer       | Control                                                                                                                                                                                                                                                                                                                                                  |
