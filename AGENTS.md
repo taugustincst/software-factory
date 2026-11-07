@@ -41,7 +41,7 @@ Read `docs/architecture.md` before changing the structure. The short version:
 
 - Zero runtime dependencies: Node built-ins only, in `src/` and in generated templates' factory code.
 - Never use `shell: true` with values from users or agents. Shell strings are only for `factory.json` commands, which the repo owner controls.
-- Keep the dashboard local-only: 127.0.0.1 binding, Host check, Origin check on POST, strict CSP, no `innerHTML`.
+- Keep the dashboard local-only by default: 127.0.0.1 binding, Host check, Origin check on POST, strict CSP, no `innerHTML`. Network reach is opt-in only (`--host` + `--allow-host`), allowed hosts get the same checks, and the UI is designed phone-first.
 - Conventional Commits, feature branches, pull requests to `main`.
 - Threat model: `docs/threat-model.md` (STRIDE). Do not weaken a guard hook, gate or workflow permission without updating it.
 

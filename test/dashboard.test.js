@@ -2,7 +2,9 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { startDashboard } from '../src/dashboard/server.js';
+import { startDashboard, resolveAllowedHosts, checkBindHost, dashboardNetwork } from '../src/dashboard/server.js';
+import { readFileSync } from 'node:fs';
+import http from 'node:http';
 import { runPipeline } from '../src/pipeline/runner.js';
 import { mockExecutor } from '../src/pipeline/executors.js';
 import { fixtureRepo } from './helpers.js';
@@ -134,4 +136,108 @@ test('cancel signals the run process through the injected signaler', async () =>
   } finally {
     dash.server.close();
   }
+});
+
+const getStatus = (p, host, path_ = '/api/runs') =>
+  new Promise((resolve, reject) => {
+    http
+      .get({ host: '127.0.0.1', port: p, path: path_, headers: { Host: host } }, (res) => {
+        res.resume();
+        resolve(res.statusCode);
+      })
+      .on('error', reject);
+  });
+
+test('default dashboard binds 127.0.0.1 and accepts only the local names', async () => {
+  assert.equal(server.address().address, '127.0.0.1');
+  assert.deepEqual([...resolveAllowedHosts(port)], [`127.0.0.1:${port}`, `localhost:${port}`]);
+  assert.equal(await getStatus(port, `localhost:${port}`), 200);
+  assert.equal(await getStatus(port, `factory.tail1234.ts.net:${port}`), 421, 'a tailnet name is not allowed by default');
+  assert.equal(await getStatus(port, `100.64.0.7:${port}`), 421);
+});
+
+test('allow-host validation: ports are added, junk is refused', () => {
+  const set = resolveAllowedHosts(4545, ['Factory.Tail1234.ts.net', '100.64.0.7:8080', '[fd7a:115c::1]']);
+  assert.ok(set.has('factory.tail1234.ts.net:4545'), 'lowercased, default port appended');
+  assert.ok(set.has('100.64.0.7:8080'), 'explicit port kept');
+  assert.ok(set.has('[fd7a:115c::1]:4545'));
+  for (const bad of ['http://x.example', 'a b', 'x.example/path', 'x.example:99999', '*', '-bad.example'])
+    assert.throws(() => resolveAllowedHosts(4545, [bad]), /allow-host/, bad);
+});
+
+test('a non-loopback bind requires an explicit allow-host', async () => {
+  assert.throws(() => checkBindHost('0.0.0.0'), /not loopback/);
+  assert.throws(() => checkBindHost('100.64.0.7', []), /--allow-host/);
+  assert.doesNotThrow(() => checkBindHost('100.64.0.7', ['100.64.0.7']));
+  assert.doesNotThrow(() => checkBindHost('127.0.0.1'));
+  assert.doesNotThrow(() => checkBindHost('::1'));
+  assert.throws(() => checkBindHost('1.2.3.4;rm'), /not an address/);
+  await assert.rejects(startDashboard({ dir, port: 40000 + Math.floor(Math.random() * 20000), host: '0.0.0.0' }), /not loopback/);
+});
+
+test('opt-in host: the named host gets reads and same-origin POSTs; others are still refused', async () => {
+  const p2 = 40000 + Math.floor(Math.random() * 20000);
+  const got = [];
+  const name = 'factory.tail1234.ts.net';
+  const dash = await startDashboard({ dir, port: p2, allowHosts: [name], spawnRun: (a) => got.push(a) });
+  try {
+    assert.equal(await getStatus(p2, `${name}:${p2}`), 200);
+    assert.equal(await getStatus(p2, `${name.toUpperCase()}:${p2}`), 200, 'Host matching is case-insensitive');
+    assert.equal(await getStatus(p2, `evil.example:${p2}`), 421);
+    assert.equal(await getStatus(p2, `${name}:1`), 421, 'wrong port is a different origin');
+    const post = (origin) =>
+      new Promise((resolve, reject) => {
+        const req = http.request(
+          {
+            host: '127.0.0.1',
+            port: p2,
+            path: '/api/runs',
+            method: 'POST',
+            headers: { Host: `${name}:${p2}`, Origin: origin, 'Content-Type': 'application/json' },
+          },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode);
+          },
+        );
+        req.on('error', reject);
+        req.end(JSON.stringify({ request: 'Add a dark mode toggle to settings', executor: 'mock' }));
+      });
+    assert.equal(await post('https://evil.example'), 403);
+    assert.equal(await post(`http://${name}.evil.example:${p2}`), 403, 'suffix tricks are refused');
+    assert.equal(await post(`http://${name}:${p2}/x`), 403, 'origin with a path is malformed');
+    assert.equal(await post('null'), 403);
+    assert.equal(await post(`http://${name}:${p2}`), 202);
+    assert.equal(got.length, 1);
+    const r = await fetch(`${dash.url}/`);
+    assert.match(r.headers.get('content-security-policy'), /frame-ancestors 'none'/, 'CSP unchanged');
+  } finally {
+    dash.server.close();
+  }
+});
+
+test('flags and env resolve the network settings; flags win, defaults stay local', () => {
+  assert.deepEqual(dashboardNetwork({}, {}), { host: '127.0.0.1', allowHosts: [] });
+  assert.deepEqual(
+    dashboardNetwork({}, { FACTORY_DASHBOARD_HOST: '100.64.0.7', FACTORY_DASHBOARD_ALLOW_HOST: ' a.ts.net, 100.64.0.7 ,' }),
+    { host: '100.64.0.7', allowHosts: ['a.ts.net', '100.64.0.7'] },
+  );
+  assert.deepEqual(
+    dashboardNetwork(
+      { host: '127.0.0.1', allowHost: ['b.ts.net'] },
+      { FACTORY_DASHBOARD_HOST: '0.0.0.0', FACTORY_DASHBOARD_ALLOW_HOST: 'a.ts.net' },
+    ),
+    { host: '127.0.0.1', allowHosts: ['b.ts.net'] },
+  );
+  assert.equal(dashboardNetwork({}, { FACTORY_DASHBOARD_HOST: '' }).host, '127.0.0.1', 'empty env is the default');
+});
+
+test('UI is mobile-first: viewport, 16px inputs, 44px targets, no hover, no innerHTML', () => {
+  const html = readFileSync(path.join(import.meta.dirname, '..', 'src', 'dashboard', 'index.html'), 'utf8');
+  assert.match(html, /name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
+  assert.match(html, /textarea,\s*select \{\s*font: 16px/, 'inputs at 16px so iOS does not zoom');
+  assert.match(html, /min-height: 44px;\s*min-width: 44px;/, 'buttons meet 44px');
+  assert.doesNotMatch(html, /:hover/, 'nothing depends on hover');
+  assert.doesNotMatch(html, /innerHTML/);
+  assert.ok(html.indexOf('@media (min-width: 860px)') > html.indexOf('.run-item {'), 'desktop layout is the override');
 });

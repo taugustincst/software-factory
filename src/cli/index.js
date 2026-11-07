@@ -24,7 +24,7 @@ Usage
   factory runs [--dir <dir>]                     List pipeline runs
   factory readiness [dir ...] [--fail-below <n>] Score repos against the Autonomy Maturity Model
   factory outcomes [--dir <dir>]                 Aggregate outcome metrics from pipeline runs
-  factory dashboard [--dir <dir>] [--port 4545]  Open the pipeline dashboard
+  factory dashboard [--dir <dir>] [--port 4545]  Open the pipeline dashboard (local-only by default)
   factory upgrade [--dir <dir>] [--dry-run]      Merge current template changes into an existing project
   factory doctor                                 Check required tools
 
@@ -70,6 +70,14 @@ readiness options
 outcomes options
   --dir <path>            Repository whose .factory runs to aggregate (default .)
   --json                  Print the metrics as JSON
+
+dashboard options
+  --dir <path>            Repository to show (default .)
+  --port <n>              Port (default 4545)
+  --host <addr>           Bind address (default 127.0.0.1; env FACTORY_DASHBOARD_HOST)
+  --allow-host <h[:port]> Also accept this Host/Origin, e.g. your Tailscale name or IP.
+                          Repeatable; required when --host is not loopback
+                          (env FACTORY_DASHBOARD_ALLOW_HOST, comma-separated)
 `;
 
 function fail(msg) {
@@ -422,16 +430,32 @@ async function cmdOutcomes(argv) {
   );
 }
 
-async function cmdDashboard(argv) {
+async function cmdDashboard(argv, env = process.env) {
   const { values } = parseArgs({
     args: argv,
-    options: { dir: { type: 'string', default: '.' }, port: { type: 'string', default: '4545' } },
+    options: {
+      dir: { type: 'string', default: '.' },
+      port: { type: 'string', default: '4545' },
+      host: { type: 'string' },
+      'allow-host': { type: 'string', multiple: true },
+    },
   });
   const port = Number(values.port);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('--port must be 1024-65535');
-  const { startDashboard } = await import('../dashboard/server.js');
-  const { url } = await startDashboard({ dir: path.resolve(values.dir), port });
+  const { startDashboard, dashboardNetwork } = await import('../dashboard/server.js');
+  const { host, allowHosts } = dashboardNetwork({ host: values.host, allowHost: values['allow-host'] }, env);
+  const { url, allowedHosts } = await startDashboard({ dir: path.resolve(values.dir), port, host, allowHosts });
   process.stdout.write(`Dashboard: ${url}  (Ctrl+C to stop)\n`);
+  if (allowHosts.length)
+    process.stdout.write(
+      `${color.yellow('!')} Reachable beyond this machine. Accepted hosts: ${allowedHosts.join(', ')}\n` +
+        `  Anyone who can reach that address can start agent runs. Use a private network such as Tailscale.\n`,
+    );
+  if (host === '0.0.0.0' || host === '::')
+    process.stdout.write(
+      `${color.yellow('!')} Bound to every interface. The Host check stops DNS rebinding, not a direct client that\n` +
+        `  sends an allowed Host itself. Prefer --host <your Tailscale IP> so only the tailnet can connect.\n`,
+    );
 }
 
 async function cmdDoctor() {
