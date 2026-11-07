@@ -3,6 +3,7 @@ import path from 'node:path';
 import { run as exec, tail } from '../util.js';
 import { scanText } from '../../claude-kit/.claude/hooks/lib/patterns.mjs';
 import { changedFiles } from '../pipeline/gates.js';
+import { readText } from '../harness/sandbox.js';
 
 /**
  * The Inspector: owns release quality. It re-checks a release candidate itself instead of
@@ -76,12 +77,11 @@ async function addedText(dir, files) {
   const tracked = new Set((await exec(['git', 'ls-files', '-z'], { cwd: dir })).stdout.split('\0').filter(Boolean));
   for (const f of files) {
     if (tracked.has(f)) continue;
-    const abs = path.join(dir, f);
     try {
-      const st = await fs.stat(abs);
-      if (st.isFile() && st.size < 1024 * 1024) added.push(...(await fs.readFile(abs, 'utf8')).split('\n'));
+      // One file handle for the size check and the read (no check-then-read race).
+      added.push(...(await readText(path.join(dir, f), 1024 * 1024)).split('\n'));
     } catch {
-      /* deleted or unreadable */
+      /* deleted, binary, too large or unreadable */
     }
   }
   return added;
