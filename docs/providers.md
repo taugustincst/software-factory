@@ -52,6 +52,29 @@ The `openai` type speaks the OpenAI-compatible chat-completions format. That cov
 - **`--provider <route>`** on `factory run`, `factory steward` or `factory improve apply` sends every stage to that one LLM.
 - **`factory providers`** shows every provider, whether it is available here, and each stage's route.
 
+## Verifying providers
+
+```bash
+factory providers --verify            # free: endpoint answers, key accepted, routed models listed
+factory providers --verify --deep     # plus one tiny tool-calling round trip per provider (a few tokens)
+factory providers --verify --only openai --deep
+factory providers --verify --all      # every provider, not only the routed or keyed ones
+```
+
+Without `--all`, it checks every provider your routing uses, plus any whose key is present. A provider it cannot check here is reported as `skipped`, with exactly what is missing (an env var, the CLI), and the command ends with a "To verify the rest" list.
+
+`--deep` proves that the model actually calls a forced tool, which is what driving the harness requires. A model that answers in prose instead fails. The command exits non-zero if a routed provider fails.
+
+**Verified so far:**
+
+| Path                                                              | How                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code CLI                                                   | Live, 2026-11-07: `--verify --deep` replied in one prompt ($0.12). Real Claude Code then drove the factory MCP harness (`read_file`) and spawned a real harness-only sub-agent (`implementer/sub`). The sub-agent read a file and reported back, all audited, sub-agent spend recorded ($0.27 total). |
+| Anthropic Messages API                                            | Against a fake server: wire format, headers, tool_use/tool_result loop, verify and deep check.                                                                                                                                                                                                        |
+| OpenAI-compatible APIs (OpenAI, Gemini, OpenRouter, Groq, Ollama) | Against a fake server: wire format, tool_calls loop, pricing, fallback, escalation, verify and deep check.                                                                                                                                                                                            |
+
+The API paths need a real key per provider to verify live. Export the key and run `factory providers --verify --deep --only <name>`.
+
 ## How other LLMs do real work
 
 API providers run an agent loop whose only tools are the [factory harness](harness.md) tools for the stage's role. They read, write, edit, run named `factory.json` commands and use git through the same scoped, sandboxed, audited layer as everything else.
