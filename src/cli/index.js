@@ -92,6 +92,8 @@ dashboard options
   --allow-host <h[:port]> Also accept this Host/Origin, e.g. your Tailscale name or IP.
                           Repeatable; required when --host is not loopback
                           (env FACTORY_DASHBOARD_ALLOW_HOST, comma-separated)
+  Optional login: export FACTORY_DASHBOARD_TOKEN (16+ characters) and every page and
+                          API call needs a sign-in or Authorization: Bearer <token>
 ${IMPROVE_HELP}${INSPECT_HELP}${PROVIDERS_HELP}`;
 
 function fail(msg) {
@@ -500,12 +502,29 @@ async function cmdDashboard(argv, env = process.env) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) fail('--port must be 1024-65535');
   const { startDashboard, dashboardNetwork } = await import('../dashboard/server.js');
   const { host, allowHosts } = dashboardNetwork({ host: values.host, allowHost: values['allow-host'] }, env);
-  const { url, allowedHosts } = await startDashboard({ dir: path.resolve(values.dir), port, host, allowHosts });
+  const { dashboardToken } = await import('../dashboard/auth.js');
+  let token = null;
+  try {
+    token = dashboardToken({ env, config: (await loadProject(path.resolve(values.dir))).config });
+  } catch (err) {
+    fail(err.message);
+  }
+  const { url, allowedHosts } = await startDashboard({
+    dir: path.resolve(values.dir),
+    port,
+    host,
+    allowHosts,
+    token: token?.value ?? null,
+  });
   process.stdout.write(`Dashboard: ${url}  (Ctrl+C to stop)\n`);
+  if (token) process.stdout.write(`${color.green('✓')} Login required (token from ${token.env}).\n`);
   if (allowHosts.length)
     process.stdout.write(
       `${color.yellow('!')} Reachable beyond this machine. Accepted hosts: ${allowedHosts.join(', ')}\n` +
-        `  Anyone who can reach that address can start agent runs. Use a private network such as Tailscale.\n`,
+        (token
+          ? `  Sign-in is on; keep it on a private network such as Tailscale all the same (plain HTTP).\n`
+          : `  Anyone who can reach that address can start agent runs. Use a private network such as Tailscale,\n` +
+            `  or require a login: export FACTORY_DASHBOARD_TOKEN="$(openssl rand -hex 24)".\n`),
     );
   if (host === '0.0.0.0' || host === '::')
     process.stdout.write(

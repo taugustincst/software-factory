@@ -6,6 +6,7 @@ import { ROOT } from '../util.js';
 import { listRuns, readRun, readLog, newRunId, RUN_ID_RE, LOG_NAME_RE } from '../pipeline/store.js';
 import { liveRunLock } from '../pipeline/lock.js';
 import { loadProject } from '../pipeline/project.js';
+import { createAuth, LOGIN_HTML } from './auth.js';
 import { resolveConfig } from '../improve/config.js';
 import { listProposals, readDigest, PROPOSAL_ID_RE } from '../improve/store.js';
 import { decideProposal, startApply, revertProposal } from '../improve/apply.js';
@@ -22,8 +23,8 @@ const SECURITY_HEADERS = {
   'Cache-Control': 'no-store',
 };
 
-function send(res, status, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(status, { 'Content-Type': type, ...SECURITY_HEADERS });
+function send(res, status, body, type = 'application/json; charset=utf-8', extra = {}) {
+  res.writeHead(status, { 'Content-Type': type, ...SECURITY_HEADERS, ...extra });
   res.end(typeof body === 'string' ? body : JSON.stringify(body));
 }
 
@@ -97,7 +98,15 @@ export function checkBindHost(host, allowHosts = []) {
  * because starting a run executes agents in the repo. `allowHosts` opts specific
  * extra names in (e.g. a Tailscale address); the same checks apply to them.
  */
-export function createDashboard({ dir, port, allowHosts = [], spawnRun = defaultSpawnRun, signalRun = defaultSignalRun }) {
+export function createDashboard({
+  dir,
+  port,
+  allowHosts = [],
+  token = null,
+  spawnRun = defaultSpawnRun,
+  signalRun = defaultSignalRun,
+}) {
+  const auth = token ? createAuth(token) : null;
   const allowedHosts = resolveAllowedHosts(port, allowHosts);
   const hostAllowed = (h) => allowedHosts.has(String(h ?? '').toLowerCase());
   const originAllowed = (o) => {
@@ -112,12 +121,38 @@ export function createDashboard({ dir, port, allowHosts = [], spawnRun = default
       const url = new URL(req.url, `http://${req.headers.host}`);
       const parts = url.pathname.split('/').filter(Boolean);
 
+      // Optional login (off unless a token is configured). /login is the only open route.
+      if (auth) {
+        if (url.pathname === '/login' && req.method === 'GET') return send(res, 200, LOGIN_HTML, 'text/html; charset=utf-8');
+        if (url.pathname === '/login' && req.method === 'POST') {
+          if (!originAllowed(req.headers.origin)) return send(res, 403, { error: 'cross-origin request refused' });
+          if (!/^application\/json\b/.test(req.headers['content-type'] ?? ''))
+            return send(res, 415, { error: 'use application/json' });
+          const body = await readJson(req);
+          const r = auth.login(body.token, req.socket.remoteAddress);
+          return r.ok
+            ? send(res, 200, { ok: true }, undefined, { 'Set-Cookie': r.cookie })
+            : send(res, r.status, { error: r.error });
+        }
+        if (url.pathname === '/logout' && req.method === 'POST') {
+          if (!originAllowed(req.headers.origin)) return send(res, 403, { error: 'cross-origin request refused' });
+          return send(res, 200, { ok: true }, undefined, { 'Set-Cookie': auth.logout(req) });
+        }
+        if (!auth.verify(req)) {
+          if (req.method === 'GET' && !url.pathname.startsWith('/api/')) {
+            res.writeHead(302, { Location: '/login', ...SECURITY_HEADERS });
+            return res.end();
+          }
+          return send(res, 401, { error: 'login required' });
+        }
+      }
+
       if (req.method === 'GET' && url.pathname === '/') {
         return send(res, 200, await fs.readFile(INDEX, 'utf8'), 'text/html; charset=utf-8');
       }
       if (req.method === 'GET' && url.pathname === '/api/project') {
         const p = await loadProject(dir);
-        return send(res, 200, { name: p.name, template: p.template, commands: p.commands, dir });
+        return send(res, 200, { name: p.name, template: p.template, commands: p.commands, dir, auth: Boolean(auth) });
       }
       if (req.method === 'GET' && url.pathname === '/api/runs') {
         const runs = await listRuns(dir);

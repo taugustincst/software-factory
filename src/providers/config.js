@@ -131,6 +131,28 @@ export function resolveProviders(cfg = {}) {
 }
 
 /** The route chain for a stage: stage-specific, then role, then default. */
+/**
+ * The two model families. Every role that writes is generative; every role that judges is
+ * decision. `routing.roles.generative` / `.decision` therefore cover the whole pipeline,
+ * not just the improvement loop, unless a stage or its exact role has its own route.
+ */
+export const ROLE_FAMILY = Object.freeze({
+  author: 'generative',
+  implementer: 'generative',
+  generative: 'generative',
+  steward: 'generative',
+  reviewer: 'decision',
+  inspector: 'decision',
+  decision: 'decision',
+});
+
+/** The route chain for a stage: stage-specific, then exact role, then model family, then default. */
 export function chainFor(routing, stage, role) {
-  return routing.stages[stage.id] ?? (role ? routing.roles[role] : undefined) ?? routing.default;
+  const family = role ? ROLE_FAMILY[String(role).split('/')[0]] : undefined;
+  return (
+    routing.stages[stage.id] ??
+    (role ? routing.roles[role] : undefined) ??
+    (family && family !== role ? routing.roles[family] : undefined) ??
+    routing.default
+  );
 }

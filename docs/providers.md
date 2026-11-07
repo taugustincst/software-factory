@@ -37,9 +37,14 @@ The `openai` type speaks the OpenAI-compatible chat-completions format. That cov
 ```
 
 - **A route** is `"<provider>"` or `"<provider>:<model>"`. The model may itself contain `:`, as in `ollama:llama3.1:8b`.
-- **Precedence:** `routing.stages.<stage>` first, then `routing.roles.<role>`, then `routing.default`.
+- **Precedence:** `routing.stages.<stage>` first, then `routing.roles.<role>`, then the role's **model family**, then `routing.default`.
+  - The generative family covers the roles that write: author, implementer, steward and the improver.
+  - The decision family covers the roles that judge: reviewer, inspector and the decider.
+
+  So `"roles": { "generative": [...], "decision": [...] }` routes the whole pipeline with two lines. A sub-agent (`implementer/sub`) follows its parent's family.
   - Stages: spec, plan, build, test, review, inspect, improve, decide.
   - Roles: author, implementer, reviewer, inspector, generative, decision.
+
 - **Fallback:** the first available route runs. A route is skipped when:
   - its key env var is unset;
   - the Claude Code CLI is missing;
@@ -51,6 +56,29 @@ The `openai` type speaks the OpenAI-compatible chat-completions format. That cov
 - **`price`** (USD per million tokens) lets the factory cost API runs from their reported usage, and enforces each stage's spend cap. Unpriced providers show $0.
 - **`--provider <route>`** on `factory run`, `factory steward` or `factory improve apply` sends every stage to that one LLM.
 - **`factory providers`** shows every provider, whether it is available here, and each stage's route.
+
+## Verifying providers
+
+```bash
+factory providers --verify            # free: endpoint answers, key accepted, routed models listed
+factory providers --verify --deep     # plus one tiny tool-calling round trip per provider (a few tokens)
+factory providers --verify --only openai --deep
+factory providers --verify --all      # every provider, not only the routed or keyed ones
+```
+
+Without `--all`, it checks every provider your routing uses, plus any whose key is present. A provider it cannot check here is reported as `skipped`, with exactly what is missing (an env var, the CLI), and the command ends with a "To verify the rest" list.
+
+`--deep` proves that the model actually calls a forced tool, which is what driving the harness requires. A model that answers in prose instead fails. The command exits non-zero if a routed provider fails.
+
+**Verified so far:**
+
+| Path                                                              | How                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code CLI                                                   | Live, 2026-11-07: `--verify --deep` replied in one prompt ($0.12). Real Claude Code then drove the factory MCP harness (`read_file`) and spawned a real harness-only sub-agent (`implementer/sub`). The sub-agent read a file and reported back, all audited, sub-agent spend recorded ($0.27 total). |
+| Anthropic Messages API                                            | Against a fake server: wire format, headers, tool_use/tool_result loop, verify and deep check.                                                                                                                                                                                                        |
+| OpenAI-compatible APIs (OpenAI, Gemini, OpenRouter, Groq, Ollama) | Against a fake server: wire format, tool_calls loop, pricing, fallback, escalation, verify and deep check.                                                                                                                                                                                            |
+
+The API paths need a real key per provider to verify live. Export the key and run `factory providers --verify --deep --only <name>`.
 
 ## How other LLMs do real work
 

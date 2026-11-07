@@ -7,6 +7,7 @@ import { gates, gatePassed, describeFailures, snapshot, VERDICT_RE } from './gat
 import { newRunId, saveRun, appendLog, readRun } from './store.js';
 import { acquireRunLock } from './lock.js';
 import { createHarness, summarizeAudit, STAGE_ROLES, DEFAULT_EXEC } from '../harness/index.js';
+import { executorSpawner } from '../harness/spawn.js';
 import { inspect, asChecks, resolveInspector, parseModelReview, INSPECT_STAGE } from '../inspect/index.js';
 import { listRuns } from './store.js';
 import { appendAudit } from '../improve/store.js';
@@ -98,6 +99,7 @@ async function runPipelineLocked({
   install = true,
   issue = null,
   proposalId = null,
+  ghBin = 'gh',
   allowDirty = false,
   signal = null,
   runId = newRunId(),
@@ -279,7 +281,7 @@ async function runPipelineLocked({
         i++;
         continue;
       }
-      const result = await shipStage({ ctx, state, ship, commit, issue, logName: attempt.log });
+      const result = await shipStage({ ctx, state, ship, commit, issue, logName: attempt.log, ghBin });
       Object.assign(attempt, { finishedAt: now(), ok: gatePassed(result.checks), gate: result.checks, summary: result.summary });
       sState.status = attempt.ok ? 'passed' : 'failed';
       await save(`Stage ${stage.id} ${sState.status}`);
@@ -324,13 +326,33 @@ async function runPipelineLocked({
         exec: project.config?.harness?.exec ?? DEFAULT_EXEC,
         auditFile: path.join(dir, '.factory', 'runs', runId, 'harness.jsonl'),
         commandTimeoutMs,
+        ghBin,
+        // Sub-agents get a slice of this: at most the stage's own budget, on top of it.
+        budgetUsd: stage.budgetUsd ?? 2,
+        // How the MCP server (Claude Code stages) spawns sub-agents.
+        spawn: { executor: 'claude', bin: 'claude' },
       };
-      ctx.harness = createHarness(ctx.harnessConfig);
+      ctx.harness = createHarness({
+        ...ctx.harnessConfig,
+        // In-process stages (mock, API providers) spawn sub-agents on the same executor.
+        spawner: executorSpawner({
+          executor,
+          dir,
+          baseConfig: ctx.harnessConfig,
+          signal: ctx.signal,
+          onData: (d) => appendLog(dir, runId, logName, `[sub-agent] ${d}`).catch(() => {}),
+        }),
+      });
       const auditBefore = summarizeAudit(ctx.harnessConfig.auditFile);
       const prompt = stage.prompt(ctx, feedbackFor[stage.id]);
       await appendLog(dir, runId, logName, `# prompt\n${prompt}\n\n# agent output\n`);
+      // harness.only: true (every agent stage) or a list of stage ids makes those stages
+      // harness-only: the factory's scoped tools are their only tools.
+      const only = project.config?.harness?.only;
+      const harnessOnly = stage.harnessOnly || only === true || (Array.isArray(only) && only.includes(stage.id));
+      if (harnessOnly) attempt.harnessOnly = true;
       const result = await executor.run({
-        stage,
+        stage: harnessOnly ? { ...stage, harnessOnly: true } : stage,
         prompt,
         dir,
         ctx,
@@ -350,6 +372,13 @@ async function runPipelineLocked({
         calls: auditAfter.calls - auditBefore.calls,
         refused: auditAfter.refused - auditBefore.refused,
       };
+      // Sub-agent spend is reported through the audit log; it counts toward the run.
+      const subUsd = Math.round((auditAfter.costUsd - auditBefore.costUsd) * 1e6) / 1e6;
+      if (subUsd > 0) {
+        attempt.harness.subagentUsd = subUsd;
+        attempt.costUsd += subUsd;
+        state.costUsd += subUsd;
+      }
       attempt.summary = String(result.summary ?? '').slice(0, 4000);
       attempt.error = result.error;
 
@@ -539,7 +568,7 @@ function prBody(ctx, state, spec, review, issue) {
   ].join('\n');
 }
 
-async function shipStage({ ctx, state, ship, commit, issue, logName }) {
+async function shipStage({ ctx, state, ship, commit, issue, logName, ghBin = 'gh' }) {
   const checks = [];
   const log = (s) => appendLog(ctx.dir, state.id, logName, `${s}\n`);
   const git = async (...args) => {
@@ -588,24 +617,27 @@ async function shipStage({ ctx, state, ship, commit, issue, logName }) {
   });
   if (c.code !== 0 || !ship) return { checks, summary: c.code === 0 ? `committed on ${branch}` : 'commit failed' };
 
-  const push = await git('push', '-u', 'origin', branch);
-  checks.push({ name: 'pushed to origin', ok: push.code === 0, severity: 'error', detail: tail(push.stderr, 1500) });
-  if (push.code !== 0) return { checks, summary: 'push failed' };
+  // Push and PR go through the harness (shipper role): audited, factory/ branches only.
+  const shipper = createHarness({
+    root: ctx.dir,
+    role: 'shipper',
+    auditFile: path.join(ctx.dir, '.factory', 'runs', state.id, 'harness.jsonl'),
+    ghBin,
+  });
+  const push = await shipper.call('git_push', { branch });
+  await log(`$ harness git_push ${branch} → ${push.ok ? 'ok' : 'failed'}\n${push.text}`);
+  checks.push({ name: 'pushed to origin', ok: push.ok, severity: 'error', detail: push.ok ? push.text : tail(push.text, 1500) });
+  if (!push.ok) return { checks, summary: 'push failed' };
 
   const spec = existsSync(ctx.artifacts.spec) ? await fs.readFile(ctx.artifacts.spec, 'utf8') : '';
   const review = existsSync(ctx.artifacts.review) ? await fs.readFile(ctx.artifacts.review, 'utf8') : '';
-  const bodyFile = path.join(ctx.dir, '.factory', 'runs', state.id, 'PR.md');
-  await fs.writeFile(bodyFile, prBody(ctx, state, spec, review, issue));
-  const pr = await exec(['gh', 'pr', 'create', '--title', subject, '--body-file', bodyFile, '--head', branch], { cwd: ctx.dir });
-  await log(`$ gh pr create → ${pr.code}\n${pr.stdout}${pr.stderr}`);
-  const url = pr.stdout.match(/https:\/\/\S+\/pull\/\d+/)?.[0] ?? null;
+  const prText = prBody(ctx, state, spec, review, issue);
+  await fs.writeFile(path.join(ctx.dir, '.factory', 'runs', state.id, 'PR.md'), prText);
+  const pr = await shipper.call('open_pr', { title: subject, body: prText, head: branch });
+  await log(`$ harness open_pr → ${pr.ok ? 'ok' : 'failed'}\n${pr.text}`);
+  const url = pr.ok ? pr.text : null;
   state.prUrl = url;
-  checks.push({
-    name: 'pull request opened',
-    ok: pr.code === 0 && Boolean(url),
-    severity: 'error',
-    detail: url ?? tail(pr.stderr, 1500),
-  });
+  checks.push({ name: 'pull request opened', ok: pr.ok, severity: 'error', detail: pr.ok ? url : tail(pr.text, 1500) });
   return { checks, summary: url ? `PR: ${url}` : 'PR creation failed' };
 }
 
@@ -613,7 +645,16 @@ async function shipStage({ ctx, state, ship, commit, issue, logName }) {
  * Ship a run that already passed review (e.g. `factory run --no-commit` in a read-only CI job,
  * then `factory ship` in a separate job that holds the write token).
  */
-export async function shipRun({ dir, runId, issue = null, push = true, overrideHold = null, by = 'human', onEvent = () => {} }) {
+export async function shipRun({
+  dir,
+  runId,
+  issue = null,
+  push = true,
+  overrideHold = null,
+  by = 'human',
+  ghBin = 'gh',
+  onEvent = () => {},
+}) {
   dir = path.resolve(dir);
   const state = await readRun(dir, runId);
   if (!state) throw new Error(`run ${runId} not found in ${dir}/.factory/runs`);
@@ -662,7 +703,7 @@ export async function shipRun({ dir, runId, issue = null, push = true, overrideH
   sState.status = 'running';
   state.ship = push;
   issue = issue ?? state.issue;
-  const result = await shipStage({ ctx, state, ship: push, commit: true, issue, logName: attempt.log });
+  const result = await shipStage({ ctx, state, ship: push, commit: true, issue, logName: attempt.log, ghBin });
   Object.assign(attempt, { finishedAt: now(), ok: gatePassed(result.checks), gate: result.checks, summary: result.summary });
   sState.status = attempt.ok ? 'passed' : 'failed';
   if (!attempt.ok) {

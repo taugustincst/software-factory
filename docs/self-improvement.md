@@ -235,14 +235,14 @@ The tool layer that every role and sub-agent uses: named, schema'd tools; scopes
 
 A `null` model means the executor's default, which is also `--model`. CLI flags `--improver-model` and `--decider-model` override the config.
 
-## Where the same two roles map elsewhere (future work)
+## Where the same two roles map elsewhere
 
-The generative/decision split generalizes:
+The generative/decision split generalizes, and routing now applies it across the whole pipeline (`docs/providers.md`):
 
-- spec-writer, planner and implementer are generative;
-- code-reviewer, the gates and the Inspector are decision.
+- spec-writer, planner, implementer and the improver are **generative**;
+- code-reviewer, the Inspector and the decider are **decision**.
 
-Routing every build stage to `models.generative` and every judging stage to `models.decision` is a natural next step. This work keeps that scope to the improvement loop and the Inspector.
+`routing.roles.generative` and `routing.roles.decision` route every stage of each family. A stage or an exact role can still override.
 
 ## Phasing
 

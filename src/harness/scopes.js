@@ -5,17 +5,17 @@ import { isProtectedPath } from '../../claude-kit/.claude/hooks/lib/patterns.mjs
  * repo-relative path prefixes it is confined to (null = anywhere not protected).
  * `{artifactDir}` is substituted with the run's artifact folder.
  */
-export const CAPABILITIES = ['read', 'git-read', 'write', 'exec', 'git-write', 'spawn'];
+export const CAPABILITIES = ['read', 'git-read', 'write', 'exec', 'git-write', 'pr', 'spawn'];
 
 export const ROLES = {
   decision: { capabilities: ['read', 'git-read'], writeRoots: [] },
-  author: { capabilities: ['read', 'git-read', 'write'], writeRoots: ['{artifactDir}'] },
-  reviewer: { capabilities: ['read', 'git-read', 'exec', 'write'], writeRoots: ['{artifactDir}'] },
+  author: { capabilities: ['read', 'git-read', 'write', 'spawn'], writeRoots: ['{artifactDir}'] },
+  reviewer: { capabilities: ['read', 'git-read', 'exec', 'write', 'spawn'], writeRoots: ['{artifactDir}'] },
   generative: { capabilities: ['read', 'git-read', 'write'], writeRoots: ['.factory/improvements'] },
-  implementer: { capabilities: ['read', 'git-read', 'write', 'exec'], writeRoots: null },
+  implementer: { capabilities: ['read', 'git-read', 'write', 'exec', 'spawn'], writeRoots: null },
   steward: { capabilities: ['read', 'git-read', 'write'], writeRoots: ['.factory/improvements'] },
   inspector: { capabilities: ['read', 'git-read', 'exec'], writeRoots: [] },
-  shipper: { capabilities: ['read', 'git-read', 'git-write'], writeRoots: [] },
+  shipper: { capabilities: ['read', 'git-read', 'git-write', 'pr'], writeRoots: [] },
 };
 
 /** Which role each pipeline stage runs under. */

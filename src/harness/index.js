@@ -88,10 +88,26 @@ export function createHarness({
   exec = DEFAULT_EXEC,
   auditFile = null,
   commandTimeoutMs = 15 * 60_000,
+  ghBin = 'gh',
+  spawner = null,
+  depth = 0,
+  maxDepth = 2,
+  budgetUsd = 0,
 }) {
   const s = scope ?? scopeFor(role, { artifactDir });
   const tools = TOOLS.filter((t) => allows(s, t.capability));
-  const h = { root: path.resolve(root), scope: s, commands, execAllowed: exec, commandTimeoutMs };
+  const h = {
+    root: path.resolve(root),
+    scope: s,
+    commands,
+    execAllowed: exec,
+    commandTimeoutMs,
+    ghBin,
+    spawner,
+    depth,
+    maxDepth,
+    budget: { remainingUsd: budgetUsd },
+  };
   const counts = { calls: 0, refused: 0 };
 
   async function audit(entry) {
@@ -113,7 +129,11 @@ export function createHarness({
       if (err) result = { ok: false, text: err, refused: true };
       else {
         try {
-          result = { ok: true, text: String(await tool.handler(h, input)) };
+          const out = await tool.handler(h, input);
+          result =
+            typeof out === 'object' && out !== null
+              ? { ok: true, text: String(out.text), costUsd: out.costUsd }
+              : { ok: true, text: String(out) };
         } catch (e) {
           result = { ok: false, text: e.message, refused: e.code === 'SANDBOX' };
         }
@@ -129,6 +149,7 @@ export function createHarness({
       ms: Date.now() - started,
       input: auditInput(input),
       error: result.ok ? null : result.text.slice(0, 500),
+      ...(result.costUsd ? { costUsd: result.costUsd } : {}),
     });
     return result;
   }
@@ -138,7 +159,7 @@ export function createHarness({
 
 /** Summarize a harness audit file: { calls, refused, byTool: {name: n}, refusedBy: {"role:tool": n} }. */
 export function summarizeAudit(file) {
-  const out = { calls: 0, refused: 0, byTool: {}, refusedBy: {} };
+  const out = { calls: 0, refused: 0, byTool: {}, refusedBy: {}, costUsd: 0 };
   if (!file || !existsSync(file)) return out;
   for (const line of readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue;
@@ -150,6 +171,7 @@ export function summarizeAudit(file) {
     }
     out.calls++;
     out.byTool[e.tool] = (out.byTool[e.tool] ?? 0) + 1;
+    if (typeof e.costUsd === 'number') out.costUsd += e.costUsd;
     if (e.refused) {
       out.refused++;
       const k = `${e.role}:${e.tool}`;

@@ -156,7 +156,21 @@ factory dashboard --dir . --host "$(tailscale ip -4)" --allow-host "$(tailscale 
 # then open http://my-pc.tail1234.ts.net:4545 on the phone
 ```
 
-`FACTORY_DASHBOARD_HOST` and `FACTORY_DASHBOARD_ALLOW_HOST` (comma-separated) do the same. A non-loopback `--host` without `--allow-host` is refused. The dashboard has no login of its own, so anyone who can reach that address can start runs: keep it on the tailnet, never on a public network.
+`FACTORY_DASHBOARD_HOST` and `FACTORY_DASHBOARD_ALLOW_HOST` (comma-separated) do the same. A non-loopback `--host` without `--allow-host` is refused. By default the dashboard has no login of its own: anyone who can reach that address can start runs. Keep it on the tailnet, never on a public network.
+
+**Optional login.** For an extra layer, export a token before starting the dashboard:
+
+```bash
+export FACTORY_DASHBOARD_TOKEN="$(openssl rand -hex 24)"   # or name another variable in factory.json dashboard.tokenEnv
+```
+
+When a token is set, every page and API call needs a session (from a phone-sized sign-in page) or `Authorization: Bearer <token>`.
+
+- The token is compared in constant time.
+- Repeated wrong tokens are rate-limited.
+- Sessions are HttpOnly, SameSite=Strict cookies held in memory, so a restart signs everyone out.
+
+The token must be at least 16 characters, and is never read from a CLI flag or from `factory.json` itself.
 
 ### Self-improvement (Steward)
 
