@@ -286,6 +286,21 @@
         }
       },
       "additionalProperties": false
+    },
+    "dashboard": {
+      "type": "object",
+      "description": "Dashboard settings.",
+      "properties": {
+        "tokenEnv": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+          "description": "Environment variable holding the optional login token (default FACTORY_DASHBOARD_TOKEN). The token itself never goes in this file."
+        }
+      },
+      "not": {
+        "required": ["token"]
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

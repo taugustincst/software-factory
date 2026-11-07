@@ -583,6 +583,12 @@
         white-space: nowrap;
         flex-shrink: 0;
       }
+      /* With sign-out showing, a phone keeps the diamond and drops the brand text. */
+      @media (max-width: 480px) {
+        body.auth .brand .name {
+          display: none;
+        }
+      }
       .brand {
         min-width: 0;
         overflow: hidden;
@@ -766,10 +772,11 @@
   </head>
   <body data-view="list">
     <header>
-      <div class="brand"><i aria-hidden="true"></i>Factory Floor</div>
+      <div class="brand"><i aria-hidden="true"></i><span class="name">Factory Floor</span></div>
       <div class="proj" id="proj"></div>
       <div class="spacer"></div>
       <button id="theme" type="button" aria-label="Toggle color theme">◐</button>
+      <button id="signout" type="button" hidden>Sign out</button>
       <button id="pageBtn" type="button" aria-pressed="false">Improve</button>
       <button class="primary" id="newBtn" type="button">New run</button>
     </header>
@@ -859,6 +866,11 @@
 
         const api = async (p, opt) => {
           const r = await fetch(p, opt);
+          // The optional login: a lapsed session goes back to the sign-in page.
+          if (r.status === 401) {
+            location.replace('/login');
+            throw new Error('login required');
+          }
           const ct = r.headers.get('content-type') || '';
           const body = ct.includes('json') ? await r.json() : await r.text();
           if (!r.ok) throw new Error(body.error || r.statusText);
@@ -1136,6 +1148,15 @@
         api('/api/project')
           .then((p) => {
             $('#proj').textContent = `${p.name} · ${p.template} · ${p.dir}`;
+            // Only when the optional login token is on.
+            if (p.auth) {
+              $('#signout').hidden = false;
+              document.body.classList.add('auth');
+              $('#signout').onclick = async () => {
+                await fetch('/logout', { method: 'POST' }).catch(() => {});
+                location.replace('/login');
+              };
+            }
           })
           .catch(() => {});
 
