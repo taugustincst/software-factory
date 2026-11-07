@@ -19,6 +19,12 @@ src/readiness/
   signals-extended.js         signal catalog, pillars 5-8
   score.js                    scoreRepo(), level thresholds, orgReadiness()
   outcomes.js                 aggregateOutcomes() over .factory run records
+src/harness/                  the factory's own tool layer (docs/harness.md)
+  tools.js                    tool registry: read/list/search/write/edit, run_command, git_*
+  scopes.js                   role scopes, write roots, sub-agent scope derivation
+  sandbox.js                  path confinement (.., absolute, NUL, symlink escapes)
+  index.js                    createHarness(): validation, dispatch, JSONL audit
+  mcp-server.js               the harness as a stdio MCP server for Claude Code agents
 src/dashboard/                local HTTP server + single-page UI
 claude-kit/.claude/           agents, commands, skills, hooks, settings, FACTORY.md
   hooks/lib/patterns.mjs      single source of truth for secret, PHI, command and path rules
@@ -37,6 +43,8 @@ scripts/smoke.js              end-to-end template + pipeline check (used in CI)
 **Agents are files.** The pipeline's system prompts are the kit's subagent definitions. Edit `.claude/agents/code-reviewer.md` in a repo and both `/review` and `factory run` use your version (project copy first, kit fallback).
 
 **Guards travel with the run.** Claude Code ignores a repository's `.claude/settings.json` until someone trusts that workspace interactively, which never happens in CI. The executor therefore passes the factory's own hooks by absolute path with `--settings` on every invocation.
+
+**The harness is the enforced path.** Every stage also gets the factory's own MCP tool server, scoped to the stage's role (author, implementer, reviewer, …) and audited to `.factory/runs/<id>/harness.jsonl`. Scope is enforced by code, not by the prompt; the mock executor writes through the same harness. See `docs/harness.md` and, for the self-improvement loop built on it, `docs/self-improvement.md`.
 
 **Least privilege per stage.** Spec, plan and review agents get read tools plus `Write` for their one artifact. Only build and test get a shell, and only through an allow-list. Review can read the diff but has no `Edit`.
 
