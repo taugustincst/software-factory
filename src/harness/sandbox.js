@@ -45,12 +45,23 @@ export function sandboxError(message) {
   return Object.assign(new Error(message), { code: 'SANDBOX' });
 }
 
-/** Read a file as UTF-8 text, refusing binaries and files over `max` bytes. */
+/**
+ * Read a file as UTF-8 text, refusing binaries and files over `max` bytes. One file handle
+ * is opened and both the size check and the read go through it, so the file cannot be
+ * swapped between the check and the read.
+ */
 export async function readText(abs, max) {
-  const st = await fs.stat(abs);
-  if (!st.isFile()) throw sandboxError('not a regular file');
-  if (st.size > max) throw sandboxError(`file is ${st.size} bytes; the cap is ${max}`);
-  const buf = await fs.readFile(abs);
-  if (buf.includes(0)) throw sandboxError('binary file');
-  return buf.toString('utf8');
+  const fh = await fs.open(abs, 'r');
+  try {
+    const st = await fh.stat();
+    if (!st.isFile()) throw sandboxError('not a regular file');
+    if (st.size > max) throw sandboxError(`file is ${st.size} bytes; the cap is ${max}`);
+    const buf = Buffer.alloc(st.size);
+    const { bytesRead } = await fh.read(buf, 0, st.size, 0);
+    const data = buf.subarray(0, bytesRead);
+    if (data.includes(0)) throw sandboxError('binary file');
+    return data.toString('utf8');
+  } finally {
+    await fh.close();
+  }
 }
