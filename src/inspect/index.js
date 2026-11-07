@@ -55,7 +55,7 @@ export function resolveInspector(cfg = {}) {
 }
 
 const RISKY = [
-  { id: 'migration', re: /(^|\/)(migrations?|drizzle|alembic|prisma\/migrations)\/|\.sql$/i, why: 'database migration' },
+  { id: 'migration', re: /(?:(?:^|\/)(?:migrations?|drizzle|alembic|prisma\/migrations)\/|\.sql$)/i, why: 'database migration' },
   {
     id: 'auth',
     re: /(^|\/|[-_.])(auth|login|session|passwords?|tokens?|permissions?|rbac|acl|oauth|jwt)([-_./]|$)/i,
