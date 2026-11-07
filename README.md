@@ -181,6 +181,29 @@ factory improve approve <id>        # then: factory improve apply <id>
 
 A light, deterministic Steward pass runs after every `factory run` (`improvement.afterRun`). The roles (`factory-improver`, `factory-decider`, `factory-steward`) ship in the kit and are pinned in `.claude/factory-roles.json`. Their models and the approval mode live in `factory.json` (`models`, `improvement`). Design: [docs/self-improvement.md](docs/self-improvement.md). The agents work through the factory's own [tool harness](docs/harness.md).
 
+### Inspector (release quality)
+
+Every run now has an `inspect` stage between review and ship. The Inspector re-verifies the candidate itself instead of trusting earlier summaries:
+
+- every earlier gate actually passed;
+- `lint`, `typecheck` and `test` pass when re-run through the harness;
+- the diff contains no secrets;
+- risky changes are flagged: migrations, auth code, workflows, guard hooks, destructive operations;
+- line coverage has not dropped against the last inspected run;
+- the version and the CHANGELOG change together;
+- `factory.json` still conforms.
+
+The model Inspector (`factory-inspector`) then judges the change against the spec. It can add a hold, but can never clear a deterministic one.
+
+The verdict is `ship`, `ship-with-notes` (the notes go into the PR) or `hold`. The rubric in `factory.json` (`inspector.rubric`) sets each check to `hold`, `note` or `off`.
+
+A held run does not ship. You have two ways forward:
+
+- fix the problem and run `factory inspect --run-id <id>`, which clears a hold that no longer applies;
+- override it with `factory ship --run-id <id> --override-hold "<reason>"`. This is human-only and audited.
+
+The Steward can never override a hold. `factory inspect --post-release` attributes the latest main-branch CI result to the newest shipped run, and a failure becomes evidence for the Steward.
+
 ## Safety model
 
 | Layer       | Control                                                                                                                                                                                                                                                                                                                                                  |

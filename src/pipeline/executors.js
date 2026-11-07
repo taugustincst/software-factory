@@ -3,6 +3,7 @@ import path from 'node:path';
 import { run, KIT_DIR, ROOT } from '../util.js';
 import { createHarness } from '../harness/index.js';
 import { mockRoles } from '../improve/roles.js';
+import { mockInspect } from '../inspect/index.js';
 
 /** Load a subagent's instructions (frontmatter stripped), preferring the project's own copy. */
 export async function loadAgentPrompt(dir, agent) {
@@ -237,6 +238,7 @@ export function mockExecutor({ script = {}, delayMs = 0, costPerAttempt = 0 } = 
     // The improvement loop's generative and decision roles (canned, offline).
     improve: mockRoles.improve,
     decide: mockRoles.decide,
+    inspect: mockInspect,
     async review(ctx) {
       await write(
         ctx.artifacts.review,

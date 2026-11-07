@@ -124,6 +124,65 @@
         }
       },
       "additionalProperties": false
+    },
+    "inspector": {
+      "type": "object",
+      "description": "The Inspector: release quality (docs/self-improvement.md).",
+      "properties": {
+        "rubric": {
+          "type": "object",
+          "description": "Per check: hold (blocks ship), note (ships with notes) or off.",
+          "properties": {
+            "gates-passed": {
+              "enum": ["hold", "note", "off"]
+            },
+            "lint": {
+              "enum": ["hold", "note", "off"]
+            },
+            "typecheck": {
+              "enum": ["hold", "note", "off"]
+            },
+            "test": {
+              "enum": ["hold", "note", "off"]
+            },
+            "coverage-delta": {
+              "enum": ["hold", "note", "off"]
+            },
+            "secrets": {
+              "enum": ["hold", "note", "off"]
+            },
+            "risky-diff": {
+              "enum": ["hold", "note", "off"]
+            },
+            "version-changelog": {
+              "enum": ["hold", "note", "off"]
+            },
+            "template-conformance": {
+              "enum": ["hold", "note", "off"]
+            },
+            "model-review": {
+              "enum": ["hold", "note", "off"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "coverageDropMax": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Largest acceptable drop in line coverage, in points, against the last inspected run."
+        },
+        "analyze": {
+          "type": "boolean",
+          "description": "Also run the model Inspector (factory-inspector). It can add a hold; it cannot clear one."
+        },
+        "model": {
+          "type": ["string", "null"],
+          "pattern": "^[\\w.:@/-]{1,100}$",
+          "description": "Model for the Inspector; null uses the executor default."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

@@ -65,7 +65,8 @@ export function runObservations(dir, run) {
   obs.harness = dir ? summarizeAudit(path.join(dir, '.factory', 'runs', run.id, 'harness.jsonl')) : { refusedBy: {} };
   const review = dir && run.artifactDir ? path.join(dir, run.artifactDir, 'REVIEW.md') : null;
   obs.findings = review && existsSync(review) ? reviewFindings(readFileSync(review, 'utf8')) : [];
-  obs.inspectorHolds = (run.inspection?.findings ?? []).filter((f) => f.level === 'hold').map((f) => f.check);
+  obs.inspectorHolds = (run.inspection?.findings ?? []).filter((f) => !f.ok && f.level === 'hold').map((f) => f.check);
+  obs.postReleaseFail = ['failure', 'timed_out', 'startup_failure'].includes(run.postRelease?.conclusion);
   return obs;
 }
 
@@ -99,6 +100,7 @@ export function buildEvidence(runs, { dir = null, recurrenceMin = 3, now = new D
       add(`harness-refused:${k}`, 'count', `harness refusals for ${k.replace(':', ' calling ')}`, o.id, n);
     for (const f of o.findings) add(`review-finding:${slug(f)}`, 'count', `runs whose review raised: "${f}"`, o.id);
     for (const c of o.inspectorHolds) add(`inspector-hold:${c}`, 'count', `runs the Inspector held on ${c}`, o.id);
+    if (o.postReleaseFail) add('post-release-fail', 'count', 'shipped runs followed by a failing main-branch CI', o.id);
   }
 
   const passed = observations.filter((o) => o.status === 'passed');
@@ -147,7 +149,7 @@ export function buildEvidence(runs, { dir = null, recurrenceMin = 3, now = new D
     }
   }
 
-  const RECURRING = /^(gate-fail|review-finding|harness-refused|stage-fail|inspector-hold):/;
+  const RECURRING = /^(?:(?:gate-fail|review-finding|harness-refused|stage-fail|inspector-hold):|post-release-fail$)/;
   const patterns = Object.values(facts)
     .filter((f) => RECURRING.test(f.id) && f.runs.length >= recurrenceMin)
     .sort((a, b) => b.runs.length - a.runs.length || a.id.localeCompare(b.id))

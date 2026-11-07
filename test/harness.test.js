@@ -16,7 +16,7 @@ const PIPELINE_CREW = [
   'security-auditor',
   'release-manager',
 ];
-const FACTORY_ROLES = ['factory-improver', 'factory-decider', 'factory-steward'];
+const FACTORY_ROLES = ['factory-improver', 'factory-decider', 'factory-steward', 'factory-inspector'];
 const KNOWLEDGE_CREW = ['architect', 'scribe', 'sorter', 'seeker', 'connector', 'librarian', 'transcriber', 'postman'];
 const KNOWLEDGE_SKILLS = [
   'contact-sync',

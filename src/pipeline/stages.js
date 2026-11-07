@@ -119,6 +119,13 @@ export const STAGES = [
       (feedback ? `\n\nContext: an earlier gate reported:\n${feedback}` : ''),
   },
   {
+    // The Inspector: re-verifies the candidate itself and can hold the release.
+    id: 'inspect',
+    title: 'Inspect',
+    agent: 'factory-inspector',
+    deterministic: true,
+  },
+  {
     id: 'ship',
     title: 'Ship',
     deterministic: true,

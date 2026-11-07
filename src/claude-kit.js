@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { KIT_DIR, ROOT } from './util.js';
 
 /** Roles that ship inside the factory; their install is pinned in .claude/factory-roles.json. */
-export const EMBEDDED_ROLES = ['factory-improver', 'factory-decider', 'factory-steward'];
+export const EMBEDDED_ROLES = ['factory-improver', 'factory-decider', 'factory-steward', 'factory-inspector'];
 export const ROLES_PIN = path.join('.claude', 'factory-roles.json');
 
 /** The pin for the roles a given kit tree installs: factory version + content hash per role. */

@@ -11,6 +11,7 @@ import { STAGES } from '../pipeline/stages.js';
 import { scoreRepo, orgReadiness } from '../readiness/score.js';
 import { aggregateOutcomes } from '../readiness/outcomes.js';
 import { cmdSteward, cmdImprove, afterRunHook, applyInline, IMPROVE_HELP } from './improve.js';
+import { cmdInspect, INSPECT_HELP } from './inspect.js';
 import { loadProject } from '../pipeline/project.js';
 import { resolveConfig } from '../improve/config.js';
 import { listProposals, PROPOSAL_ID_RE } from '../improve/store.js';
@@ -31,6 +32,7 @@ Usage
   factory dashboard [--dir <dir>] [--port 4545]  Open the pipeline dashboard (local-only by default)
   factory steward [--dir <dir>] [--apply]        Steward: evidence, proposals, ranking, digest (self-improvement)
   factory improve [list|show|approve|reject|apply|revert] [id]   The improvement backlog
+  factory inspect --run-id <id> | --post-release  Inspector: re-inspect a run, or watch main after a release
   factory upgrade [--dir <dir>] [--dry-run]      Merge current template changes into an existing project
   factory doctor                                 Check required tools
 
@@ -86,7 +88,7 @@ dashboard options
   --allow-host <h[:port]> Also accept this Host/Origin, e.g. your Tailscale name or IP.
                           Repeatable; required when --host is not loopback
                           (env FACTORY_DASHBOARD_ALLOW_HOST, comma-separated)
-${IMPROVE_HELP}`;
+${IMPROVE_HELP}${INSPECT_HELP}`;
 
 function fail(msg) {
   process.stderr.write(`${color.red('error')} ${msg}\n`);
@@ -294,6 +296,7 @@ async function cmdShip(argv) {
       'run-id': { type: 'string' },
       issue: { type: 'string' },
       'no-push': { type: 'boolean' },
+      'override-hold': { type: 'string' },
     },
   });
   if (!values['run-id'] || !RUN_ID_RE.test(values['run-id'])) fail('--run-id <id> is required');
@@ -303,6 +306,7 @@ async function cmdShip(argv) {
     runId: values['run-id'],
     issue: values.issue ?? null,
     push: !values['no-push'],
+    overrideHold: values['override-hold'] ?? null,
   });
   const ship = state.stages.find((s) => s.id === 'ship');
   const last = ship.attempts.at(-1);
@@ -548,6 +552,8 @@ export async function main(argv) {
         return await cmdSteward(rest);
       case 'improve':
         return await cmdImprove(rest);
+      case 'inspect':
+        return await cmdInspect(rest);
       case 'doctor':
         return await cmdDoctor();
       case '--version':

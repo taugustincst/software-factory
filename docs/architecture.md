@@ -33,6 +33,7 @@ src/improve/                  self-improvement (docs/self-improvement.md)
   store.js                    .factory/improvements/: proposals, audit.jsonl, digest
   steward.js                  the Steward pass: reconcile, re-score, retire, draft, decide, digest
   apply.js                    approve/reject, apply as a factory run, git revert
+src/inspect/                  the Inspector: re-verification, rubric verdict, model review, post-release watch
 src/dashboard/                local HTTP server + single-page UI
 claude-kit/.claude/           agents, commands, skills, hooks, settings, FACTORY.md
   hooks/lib/patterns.mjs      single source of truth for secret, PHI, command and path rules

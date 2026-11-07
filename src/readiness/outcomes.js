@@ -8,7 +8,7 @@
  * reported as null with an explanatory note — never fabricated.
  */
 
-const COMPLETED = new Set(['passed', 'failed', 'cancelled']);
+const COMPLETED = new Set(['passed', 'failed', 'cancelled', 'held']);
 
 function minutesBetween(run) {
   const start = Date.parse(run.startedAt ?? '');
