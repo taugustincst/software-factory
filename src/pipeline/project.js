@@ -13,10 +13,11 @@ export async function loadProject(dir) {
       name: cfg.name ?? path.basename(dir),
       template: cfg.template ?? 'custom',
       commands: cfg.commands ?? {},
+      config: cfg,
       inferred: false,
     };
   }
-  return { name: path.basename(dir), template: 'inferred', commands: await inferCommands(dir), inferred: true };
+  return { name: path.basename(dir), template: 'inferred', commands: await inferCommands(dir), config: {}, inferred: true };
 }
 
 export async function inferCommands(dir) {

@@ -6,6 +6,7 @@ import { selectStages } from './stages.js';
 import { gates, gatePassed, describeFailures, snapshot, VERDICT_RE } from './gates.js';
 import { newRunId, saveRun, appendLog, readRun } from './store.js';
 import { acquireRunLock } from './lock.js';
+import { createHarness, summarizeAudit, STAGE_ROLES, DEFAULT_EXEC } from '../harness/index.js';
 
 export { RunLockError, liveRunLock, readRunLock } from './lock.js';
 
@@ -273,6 +274,18 @@ async function runPipelineLocked({
 
       ctx.attemptStartedMs = Date.now();
       ctx.snapshotBefore = await snapshot(dir);
+      // The stage's harness: in-process for the mock executor, as an MCP server for Claude.
+      ctx.harnessConfig = {
+        root: dir,
+        role: stage.role ?? STAGE_ROLES[stage.id] ?? 'decision',
+        artifactDir: rel(artifactDir),
+        commands: project.commands,
+        exec: project.config?.harness?.exec ?? DEFAULT_EXEC,
+        auditFile: path.join(dir, '.factory', 'runs', runId, 'harness.jsonl'),
+        commandTimeoutMs,
+      };
+      ctx.harness = createHarness(ctx.harnessConfig);
+      const auditBefore = summarizeAudit(ctx.harnessConfig.auditFile);
       const prompt = stage.prompt(ctx, feedbackFor[stage.id]);
       await appendLog(dir, runId, logName, `# prompt\n${prompt}\n\n# agent output\n`);
       const result = await executor.run({
@@ -284,6 +297,12 @@ async function runPipelineLocked({
       });
       state.costUsd += result.costUsd ?? 0;
       attempt.costUsd = result.costUsd ?? 0;
+      const auditAfter = summarizeAudit(ctx.harnessConfig.auditFile);
+      attempt.harness = {
+        role: ctx.harnessConfig.role,
+        calls: auditAfter.calls - auditBefore.calls,
+        refused: auditAfter.refused - auditBefore.refused,
+      };
       attempt.summary = String(result.summary ?? '').slice(0, 4000);
       attempt.error = result.error;
 

@@ -32,6 +32,7 @@ Read `docs/architecture.md` before changing the structure. The short version:
 - `bin/factory.js` — CLI entry; `src/cli/index.js` — argument parsing and commands.
 - `src/scaffold.js` — template rendering (`{{factory.*}}` tokens) and project creation.
 - `src/pipeline/` — the spec → plan → build → test → review → ship loop: `stages.js` (definitions), `gates.js` (deterministic checks), `executors.js` (claude / mock), `runner.js` (attempts, feedback, review rewinds), `store.js` (`.factory/runs/<id>/run.json`).
+- `src/harness/` — the factory's own tool layer: registry, role scopes, sandbox, audit, MCP server. See `docs/harness.md`; the self-improvement design that builds on it is `docs/self-improvement.md`.
 - `src/readiness/` — the Autonomy Maturity Model: `signals.js` + `signals-extended.js` (binary signal catalog), `context.js` (repo-tree probes), `score.js` (scoring, levels, org readiness), `outcomes.js` (run-outcome aggregation). See `docs/autonomy-maturity.md`.
 - `claude-kit/.claude/` — the agents, commands, skills and guard hooks installed into generated projects. Guard rules live only in `claude-kit/.claude/hooks/lib/patterns.mjs`; every rule change needs positive and negative cases in `test/patterns.test.js`.
 - `templates/<id>/files/` — project skeletons; `templates/_shared/files/` is copied into every scaffold. Template files are not linted by this repo; they are verified by `npm run smoke`.

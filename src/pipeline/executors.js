@@ -1,6 +1,7 @@
 import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
-import { run, KIT_DIR } from '../util.js';
+import { run, KIT_DIR, ROOT } from '../util.js';
+import { createHarness } from '../harness/index.js';
 
 /** Load a subagent's instructions (frontmatter stripped), preferring the project's own copy. */
 export async function loadAgentPrompt(dir, agent) {
@@ -62,11 +63,48 @@ export function guardSettings() {
 }
 
 /**
+ * Write the harness MCP config for one stage attempt and return the extra CLI args:
+ * `--mcp-config <file>` plus the `mcp__factory__<tool>` names this role may call.
+ * The server's settings travel by file, never argv, so agent text cannot reach them.
+ */
+export async function harnessArgs(dir, stage, cfg) {
+  const base = path.join(dir, '.factory', 'harness');
+  await fs.mkdir(base, { recursive: true });
+  const serverCfg = path.join(base, `${stage.id}.json`);
+  await fs.writeFile(serverCfg, JSON.stringify(cfg, null, 2));
+  const mcpFile = path.join(base, `${stage.id}.mcp.json`);
+  await fs.writeFile(
+    mcpFile,
+    JSON.stringify(
+      {
+        mcpServers: {
+          factory: {
+            command: process.execPath,
+            args: [path.join(ROOT, 'src', 'harness', 'mcp-server.js'), '--config', serverCfg],
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  const tools = createHarness(cfg).tools.map((t) => `mcp__factory__${t.name}`);
+  return { args: ['--mcp-config', mcpFile], tools };
+}
+
+/**
  * Runs a stage with Claude Code in headless mode (`claude -p`, stream-json so logs are live).
  * Permissions: acceptEdits plus an explicit per-stage tool allow-list. Guard hooks are always
  * injected (see guardSettings). Spend is capped per stage with --max-budget-usd.
  */
-export function claudeExecutor({ model, reviewModel, budgetMultiplier = 1, timeoutMs = 45 * 60_000, bin = 'claude' } = {}) {
+export function claudeExecutor({
+  model,
+  reviewModel,
+  stageModels = {},
+  budgetMultiplier = 1,
+  timeoutMs = 45 * 60_000,
+  bin = 'claude',
+} = {}) {
   return {
     name: 'claude',
     async run({ stage, prompt, dir, ctx, onData }) {
@@ -75,6 +113,9 @@ export function claudeExecutor({ model, reviewModel, budgetMultiplier = 1, timeo
       const settingsFile = path.join(dir, '.factory', 'guard-settings.json');
       await fs.mkdir(path.dirname(settingsFile), { recursive: true });
       await fs.writeFile(settingsFile, JSON.stringify(guardSettings(), null, 2));
+      // The factory's own harness rides along on every stage, scoped to the stage's role.
+      const harness = ctx?.harnessConfig ? await harnessArgs(dir, stage, ctx.harnessConfig) : { args: [], tools: [] };
+      const allowed = stage.harnessOnly ? harness.tools : [...stage.tools, ...harness.tools];
       const args = [
         '-p',
         prompt,
@@ -86,15 +127,17 @@ export function claudeExecutor({ model, reviewModel, budgetMultiplier = 1, timeo
         '--permission-mode',
         'acceptEdits',
         '--allowedTools',
-        stage.tools.join(','),
+        allowed.join(','),
         '--max-budget-usd',
         String(cap),
         '--settings',
         settingsFile,
+        ...harness.args,
       ];
-      // A second pair of eyes: the review stage may run on a different model
-      // than the one that wrote the code (--review-model).
-      const stageModel = stage.id === 'review' && reviewModel ? reviewModel : model;
+      // Model routing: a per-stage model (e.g. the improvement loop's generative and
+      // decision models) wins; the review stage may use --review-model (a second pair
+      // of eyes); everything else uses --model.
+      const stageModel = stageModels[stage.id] ?? (stage.id === 'review' && reviewModel ? reviewModel : model);
       if (stageModel) args.push('--model', stageModel);
 
       let buffer = '';
@@ -153,7 +196,16 @@ export function claudeExecutor({ model, reviewModel, budgetMultiplier = 1, timeo
  */
 export function mockExecutor({ script = {}, delayMs = 0, costPerAttempt = 0 } = {}) {
   const attempts = {};
+  let ctxForWrite = null;
+  // Writes go through the stage's harness when the runner provides one, so offline
+  // runs exercise the same scopes, sandbox and audit log as real agents.
   const write = async (file, text) => {
+    const h = ctxForWrite?.harness;
+    if (h) {
+      const r = await h.call('write_file', { path: ctxForWrite.rel(file), content: text });
+      if (!r.ok) throw new Error(`harness refused mock write: ${r.text}`);
+      return;
+    }
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, text);
   };
@@ -194,6 +246,7 @@ export function mockExecutor({ script = {}, delayMs = 0, costPerAttempt = 0 } = 
       attempts[stage.id] = (attempts[stage.id] ?? 0) + 1;
       if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
       const fn = script[stage.id] ?? defaults[stage.id];
+      ctxForWrite = ctx;
       onData?.(`[mock] ${stage.agent} attempt ${attempts[stage.id]}\n`);
       const out = (await fn?.(ctx, attempts[stage.id])) ?? {};
       return {
