@@ -34,6 +34,8 @@ test('sandbox: refuses absolute paths, NUL, .. escapes and symlink escapes', () 
   assert.equal(resolveInside(dir, 'src/../src/index.js').rel, 'src/index.js');
   for (const bad of ['/etc/passwd', '../outside', 'src/../../x', 'a\0b', 'C:\\x', ''])
     assert.throws(() => resolveInside(dir, bad), { code: 'SANDBOX' }, JSON.stringify(bad));
+  // Windows runners usually lack the privilege to create symlinks; the escape check is POSIX-tested.
+  if (process.platform === 'win32') return;
   const outside = tmp('sf-out-');
   writeFileSync(path.join(outside, 'secret.txt'), 'nope');
   symlinkSync(outside, path.join(dir, 'link'));
