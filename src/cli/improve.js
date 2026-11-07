@@ -4,6 +4,7 @@ import { color, which } from '../util.js';
 import { loadProject } from '../pipeline/project.js';
 import { runPipeline } from '../pipeline/runner.js';
 import { claudeExecutor, mockExecutor } from '../pipeline/executors.js';
+import { routedExecutor } from '../providers/router.js';
 import { resolveConfig } from '../improve/config.js';
 import { stewardPass } from '../improve/steward.js';
 import { listProposals, readProposal, PROPOSAL_ID_RE } from '../improve/store.js';
@@ -15,17 +16,20 @@ const out = (s) => process.stdout.write(s);
  * The executor for the improvement roles. Model routing: --improver-model / --decider-model
  * win, then factory.json models.generative / models.decision, then --model, then the default.
  */
-export async function roleExecutor({ executor = 'claude', model, improverModel, deciderModel, config = {} }) {
+export async function roleExecutor({ executor = 'claude', model, improverModel, deciderModel, provider = null, config = {} }) {
   if (executor === 'mock') return mockExecutor();
   if (executor !== 'claude') throw new Error(`unknown executor "${executor}" (claude | mock)`);
-  if (!(await which('claude')))
-    throw new Error('Claude Code CLI not found. Install it: npm install -g @anthropic-ai/claude-code');
   const { models } = resolveConfig(config);
   const stageModels = {};
   const gen = improverModel ?? models.generative;
   const dec = deciderModel ?? models.decision;
   if (gen) stageModels.improve = gen;
   if (dec) stageModels.decide = dec;
+  // Multi-provider: routing.roles.generative / .decision (or --provider) pick the LLMs.
+  if (provider || config.providers || config.routing)
+    return routedExecutor({ config, override: provider, legacy: { model, stageModels } });
+  if (!(await which('claude')))
+    throw new Error('Claude Code CLI not found. Install it: npm install -g @anthropic-ai/claude-code');
   return claudeExecutor({ model, stageModels });
 }
 
@@ -80,6 +84,7 @@ export async function cmdSteward(argv) {
       model: { type: 'string' },
       'improver-model': { type: 'string' },
       'decider-model': { type: 'string' },
+      provider: { type: 'string' },
       'no-analyze': { type: 'boolean' },
       apply: { type: 'boolean' },
       ship: { type: 'boolean' },
@@ -96,6 +101,7 @@ export async function cmdSteward(argv) {
           model: values.model,
           improverModel: values['improver-model'],
           deciderModel: values['decider-model'],
+          provider: values.provider ?? null,
           config: project.config,
         })
       : null;
@@ -187,6 +193,7 @@ steward options (factory steward: the Steward's cross-run review)
   --executor <name>       claude (default) | mock
   --improver-model <name> Generative model (default factory.json models.generative)
   --decider-model <name>  Decision model (default factory.json models.decision)
+  --provider <p[:model]>  Run both roles on this LLM (see factory providers)
   --no-analyze            Deterministic only: evidence, re-score, retire, digest (no spend)
   --apply                 Then apply auto-approved proposals as factory runs, one at a time
   --json                  Print the digest and pass report as JSON

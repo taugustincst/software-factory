@@ -34,6 +34,10 @@ src/improve/                  self-improvement (docs/self-improvement.md)
   steward.js                  the Steward pass: reconcile, re-score, retire, draft, decide, digest
   apply.js                    approve/reject, apply as a factory run, git revert
 src/inspect/                  the Inspector: re-verification, rubric verdict, model review, post-release watch
+src/providers/                other LLMs (docs/providers.md)
+  config.js                   presets, factory.json providers + routing, validation, route chains
+  api.js                      agent loop over Anthropic Messages / OpenAI-compatible APIs, tools = harness
+  router.js                   the routed executor: per stage/role chain, fallback, escalation
 src/dashboard/                local HTTP server + single-page UI
 claude-kit/.claude/           agents, commands, skills, hooks, settings, FACTORY.md
   hooks/lib/patterns.mjs      single source of truth for secret, PHI, command and path rules

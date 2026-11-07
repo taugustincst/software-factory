@@ -1,6 +1,6 @@
 # Self-improvement: the factory that learns from its own runs
 
-Status: design, with Phase 1 implemented across stacked PRs (see [Phasing](#phasing)). PR A (harness), PR B (the improvement loop) and PR C (the Inspector) are implemented. Multi-provider models (PR D, added by Tj on 2026-11-06: "make it so that the factory can grab other llms as needed") follow.
+Status: design, with Phase 1 implemented across stacked PRs (see [Phasing](#phasing)). PR A (harness), PR B (the improvement loop) and PR C (the Inspector) are implemented. Multi-provider models (PR D, added by Tj on 2026-11-06: "make it so that the factory can grab other llms as needed") are in [providers.md](providers.md): `models.*` still apply on Claude Code, and `routing.roles.generative` / `.decision` / `.inspector` can send each role to any provider.
 Directed by Tj on 2026-11-06 ("I want the factory to be self improving"). That directive came with six amendments:
 
 1. Build an LLM into the loop.

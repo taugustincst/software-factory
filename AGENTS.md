@@ -35,6 +35,7 @@ Read `docs/architecture.md` before changing the structure. The short version:
 - `src/harness/` — the factory's own tool layer: registry, role scopes, sandbox, audit, MCP server. See `docs/harness.md`; the self-improvement design that builds on it is `docs/self-improvement.md`.
 - `src/improve/` — the self-improvement loop: evidence, citation gate, computed risk + approval regime, Steward pass, apply/revert. `factory steward`, `factory improve`.
 - `src/inspect/` — the Inspector (`inspect` stage before ship): re-verifies the candidate, rubric verdict ship / ship-with-notes / hold, audited human override, post-release watch.
+- `src/providers/` — other LLMs: provider presets and `factory.json` routing, the API agent loop (tools = the harness), and the routed executor with fallback. `factory providers`. See `docs/providers.md`.
 - `src/readiness/` — the Autonomy Maturity Model: `signals.js` + `signals-extended.js` (binary signal catalog), `context.js` (repo-tree probes), `score.js` (scoring, levels, org readiness), `outcomes.js` (run-outcome aggregation). See `docs/autonomy-maturity.md`.
 - `claude-kit/.claude/` — the agents, commands, skills and guard hooks installed into generated projects. Guard rules live only in `claude-kit/.claude/hooks/lib/patterns.mjs`; every rule change needs positive and negative cases in `test/patterns.test.js`.
 - `templates/<id>/files/` — project skeletons; `templates/_shared/files/` is copied into every scaffold. Template files are not linted by this repo; they are verified by `npm run smoke`.
